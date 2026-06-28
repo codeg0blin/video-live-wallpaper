@@ -1,0 +1,4 @@
+com.example.videowallpaper.test.app-androidTest-0 /home/kdk/AndroidStudioProjects/VideoWallpaper/app/build/generated/res/resValues/androidTest/debug
+com.example.videowallpaper.test.app-mergeDebugAndroidTestResources-1 /home/kdk/AndroidStudioProjects/VideoWallpaper/app/build/intermediates/incremental/debugAndroidTest/mergeDebugAndroidTestResources/merged.dir
+com.example.videowallpaper.test.app-mergeDebugAndroidTestResources-2 /home/kdk/AndroidStudioProjects/VideoWallpaper/app/build/intermediates/incremental/debugAndroidTest/mergeDebugAndroidTestResources/stripped.dir
+com.example.videowallpaper.test.app-debugAndroidTest-3 /home/kdk/AndroidStudioProjects/VideoWallpaper/app/build/intermediates/merged_res/debugAndroidTest/mergeDebugAndroidTestResources

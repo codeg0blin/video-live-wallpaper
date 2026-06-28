@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Video Wallpaper</string>
+    <string name="wallpaper_description">Plays your chosen video as a live wallpaper</string>
+    <string name="title">Video Live Wallpaper</string>
+    <string name="subtitle">Pick a video, then set it as your lock screen or home screen wallpaper.</string>
+    <string name="pick_video">Choose Video</string>
+    <string name="no_video_selected">No video selected</string>
+    <string name="set_lock">Set as Lock Screen Wallpaper</string>
+    <string name="set_home">Set as Home Screen Wallpaper</string>
+    <string name="select_video_first">Please choose a video first</string>
+    <string name="error_live_wallpaper_unavailable">Live wallpapers aren\'t supported on this device</string>
+</resources>

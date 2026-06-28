@@ -1,0 +1,31 @@
+R_DEF: Internal format may change without notice
+local
+color accent
+color background
+color surface
+color text_primary
+color text_secondary
+drawable ic_launcher_background
+drawable ic_launcher_foreground
+id noVideoText
+id pickButton
+id previewCard
+id previewVideo
+id setHomeButton
+id setLockButton
+id subtitleText
+id titleText
+layout activity_main
+mipmap ic_launcher
+string app_name
+string error_live_wallpaper_unavailable
+string no_video_selected
+string pick_video
+string select_video_first
+string set_home
+string set_lock
+string subtitle
+string title
+string wallpaper_description
+style Theme.VideoWallpaper
+xml video_wallpaper

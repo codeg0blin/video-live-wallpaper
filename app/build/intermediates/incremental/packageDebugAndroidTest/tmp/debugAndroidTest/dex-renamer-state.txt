@@ -1,0 +1,4 @@
+#Sun Jun 28 15:54:19 AEST 2026
+base.0=/home/kdk/AndroidStudioProjects/VideoWallpaper/app/build/intermediates/dex/debugAndroidTest/mergeProjectDexDebugAndroidTest/0/classes.dex
+path.0=0/classes.dex
+renamed.0=classes.dex

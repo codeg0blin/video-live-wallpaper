@@ -1,0 +1,23 @@
+# Build output
+*.apk
+*.aab
+*.ap_
+*.dex
+/build/
+/app/build/
+.gradle/
+local.properties
+
+# Signing material — NEVER commit these
+*.jks
+*.keystore
+key.properties
+keystore.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Logs
+*.log
