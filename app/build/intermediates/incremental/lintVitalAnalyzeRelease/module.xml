@@ -1,0 +1,19 @@
+<lint-module
+    format="1"
+    dir="/home/kdk/AndroidStudioProjects/VideoWallpaper/app"
+    name=":app"
+    type="APP"
+    maven="VideoWallpaper:app:unspecified"
+    agpVersion="8.5.2"
+    buildFolder="build"
+    bootClassPath="/home/kdk/Android/Sdk/platforms/android-34/android.jar:/home/kdk/Android/Sdk/build-tools/34.0.0/core-lambda-stubs.jar"
+    javaSourceLevel="17"
+    compileTarget="android-34"
+    neverShrinking="true">
+  <lintOptions
+      abortOnError="true"
+      absolutePaths="true"
+      checkReleaseBuilds="true"
+      explainIssues="true"/>
+  <variant name="release"/>
+</lint-module>

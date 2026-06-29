@@ -1,0 +1,1 @@
+Initial release. Pick a video and set it as a looping live wallpaper, with separate buttons for home screen and lock screen, plus adjustable playback speed and crop mode.

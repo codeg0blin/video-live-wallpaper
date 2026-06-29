@@ -1,0 +1,22 @@
+[
+    {
+        "merged": "com.example.videowallpaper.app-release-35:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.example.videowallpaper.app-main-36:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.example.videowallpaper.app-release-35:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.example.videowallpaper.app-main-36:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.example.videowallpaper.app-release-35:/xml_video_wallpaper.xml.flat",
+        "source": "com.example.videowallpaper.app-main-36:/xml/video_wallpaper.xml"
+    },
+    {
+        "merged": "com.example.videowallpaper.app-release-35:/drawable_ic_launcher_background.xml.flat",
+        "source": "com.example.videowallpaper.app-main-36:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "com.example.videowallpaper.app-release-35:/layout_activity_main.xml.flat",
+        "source": "com.example.videowallpaper.app-main-36:/layout/activity_main.xml"
+    }
+]
