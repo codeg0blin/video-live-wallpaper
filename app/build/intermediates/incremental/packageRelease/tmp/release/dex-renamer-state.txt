@@ -1,4 +1,0 @@
-#Mon Jun 29 10:08:11 AEST 2026
-base.0=/home/kdk/AndroidStudioProjects/VideoWallpaper/app/build/intermediates/dex/release/mergeDexRelease/classes.dex
-path.0=classes.dex
-renamed.0=classes.dex
