@@ -21,3 +21,4 @@ keystore.properties
 
 # Logs
 *.log
+/app/release/
