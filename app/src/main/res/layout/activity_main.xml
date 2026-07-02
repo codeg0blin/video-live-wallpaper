@@ -1,202 +1,199 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/background"
-    android:fillViewport="true">
+    android:paddingStart="20dp"
+    android:paddingEnd="20dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="16dp">
 
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:layout_width="match_parent"
+    <TextView
+        android:id="@+id/titleText"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:padding="24dp">
+        android:fontFamily="sans-serif-medium"
+        android:text="@string/title"
+        android:textColor="@color/text_primary"
+        android:textSize="20sp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/subtitleText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="@string/subtitle"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/titleText" />
+
+    <!-- Video preview surface -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/previewCard"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="10dp"
+        app:cardBackgroundColor="@color/surface"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/subtitleText"
+        app:layout_constraintBottom_toTopOf="@id/pickButton"
+        app:layout_constraintHeight_min="100dp" />
+
+    <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="@id/previewCard"
+        app:layout_constraintBottom_toBottomOf="@id/previewCard"
+        app:layout_constraintStart_toStartOf="@id/previewCard"
+        app:layout_constraintEnd_toEndOf="@id/previewCard">
+
+        <VideoView
+            android:id="@+id/previewVideo"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center" />
 
         <TextView
-            android:id="@+id/titleText"
+            android:id="@+id/noVideoText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:fontFamily="sans-serif-medium"
-            android:text="@string/title"
-            android:textColor="@color/text_primary"
-            android:textSize="26sp"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-
-        <TextView
-            android:id="@+id/subtitleText"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/subtitle"
+            android:layout_gravity="center"
+            android:text="@string/no_video_selected"
             android:textColor="@color/text_secondary"
-            android:textSize="15sp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/titleText" />
+            android:textSize="13sp" />
 
-        <!-- Video preview surface -->
-        <androidx.cardview.widget.CardView
-            android:id="@+id/previewCard"
-            android:layout_width="0dp"
-            android:layout_height="240dp"
-            android:layout_marginTop="28dp"
-            app:cardBackgroundColor="@color/surface"
-            app:cardCornerRadius="20dp"
-            app:cardElevation="0dp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/subtitleText">
+    </FrameLayout>
 
-            <FrameLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent">
+    <Button
+        android:id="@+id/pickButton"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="0dp"
+        android:layout_height="40dp"
+        android:layout_marginTop="8dp"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:text="@string/pick_video"
+        android:textColor="@color/text_primary"
+        android:textSize="13sp"
+        app:cornerRadius="10dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/previewCard"
+        app:strokeColor="@color/accent" />
 
-                <VideoView
-                    android:id="@+id/previewVideo"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:layout_gravity="center" />
+    <!-- Playback speed control -->
+    <TextView
+        android:id="@+id/speedLabel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="@string/speed_label"
+        android:textColor="@color/text_primary"
+        android:textSize="12sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/pickButton" />
 
-                <TextView
-                    android:id="@+id/noVideoText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:text="@string/no_video_selected"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="15sp" />
+    <TextView
+        android:id="@+id/speedValueText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/speed_default_display"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp"
+        app:layout_constraintBaseline_toBaselineOf="@id/speedLabel"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-            </FrameLayout>
-        </androidx.cardview.widget.CardView>
+    <SeekBar
+        android:id="@+id/speedSeekBar"
+        android:layout_width="0dp"
+        android:layout_height="24dp"
+        android:layout_marginTop="0dp"
+        android:max="35"
+        android:progress="15"
+        android:progressTint="@color/accent"
+        android:thumbTint="@color/accent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/speedLabel" />
+
+    <!-- Crop / scaling mode control -->
+    <TextView
+        android:id="@+id/cropLabel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/crop_label"
+        android:textColor="@color/text_primary"
+        android:textSize="12sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/speedSeekBar" />
+
+    <com.google.android.material.button.MaterialButtonToggleGroup
+        android:id="@+id/cropToggleGroup"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/cropLabel"
+        app:selectionRequired="true"
+        app:singleSelection="true">
 
         <Button
-            android:id="@+id/pickButton"
+            android:id="@+id/cropFillButton"
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_marginTop="16dp"
-            android:text="@string/pick_video"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/crop_fill"
             android:textColor="@color/text_primary"
-            app:cornerRadius="14dp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/previewCard"
+            android:textSize="11sp"
             app:strokeColor="@color/accent" />
 
-        <!-- Playback speed control -->
-        <TextView
-            android:id="@+id/speedLabel"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
-            android:text="@string/speed_label"
-            android:textColor="@color/text_primary"
-            android:textSize="15sp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/pickButton" />
-
-        <TextView
-            android:id="@+id/speedValueText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/speed_default_display"
-            android:textColor="@color/text_secondary"
-            android:textSize="15sp"
-            app:layout_constraintBaseline_toBaselineOf="@id/speedLabel"
-            app:layout_constraintEnd_toEndOf="parent" />
-
-        <SeekBar
-            android:id="@+id/speedSeekBar"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:max="35"
-            android:progress="15"
-            android:progressTint="@color/accent"
-            android:thumbTint="@color/accent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/speedLabel" />
-
-        <!-- Crop / scaling mode control -->
-        <TextView
-            android:id="@+id/cropLabel"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:text="@string/crop_label"
-            android:textColor="@color/text_primary"
-            android:textSize="15sp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/speedSeekBar" />
-
-        <com.google.android.material.button.MaterialButtonToggleGroup
-            android:id="@+id/cropToggleGroup"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/cropLabel"
-            app:selectionRequired="true"
-            app:singleSelection="true">
-
-            <Button
-                android:id="@+id/cropFillButton"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:text="@string/crop_fill"
-                android:textColor="@color/text_primary"
-                android:textSize="13sp"
-                app:strokeColor="@color/accent" />
-
-            <Button
-                android:id="@+id/cropFitButton"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:text="@string/crop_fit"
-                android:textColor="@color/text_primary"
-                android:textSize="13sp"
-                app:strokeColor="@color/accent" />
-
-        </com.google.android.material.button.MaterialButtonToggleGroup>
-
         <Button
-            android:id="@+id/setLockButton"
+            android:id="@+id/cropFitButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_marginTop="24dp"
-            android:backgroundTint="@color/accent"
-            android:enabled="false"
-            android:text="@string/set_lock"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/crop_fit"
             android:textColor="@color/text_primary"
-            app:cornerRadius="14dp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/cropToggleGroup" />
+            android:textSize="11sp"
+            app:strokeColor="@color/accent" />
 
-        <Button
-            android:id="@+id/setHomeButton"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_marginTop="14dp"
-            android:layout_marginBottom="24dp"
-            android:backgroundTint="@color/accent"
-            android:enabled="false"
-            android:text="@string/set_home"
-            android:textColor="@color/text_primary"
-            app:cornerRadius="14dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/setLockButton" />
+    </com.google.android.material.button.MaterialButtonToggleGroup>
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
-</ScrollView>
+    <Button
+        android:id="@+id/setWallpaperButton"
+        android:layout_width="0dp"
+        android:layout_height="44dp"
+        android:layout_marginTop="10dp"
+        android:backgroundTint="@color/accent"
+        android:enabled="false"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:text="@string/set_wallpaper"
+        android:textColor="@color/text_primary"
+        android:textSize="13sp"
+        app:cornerRadius="10dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/cropToggleGroup" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

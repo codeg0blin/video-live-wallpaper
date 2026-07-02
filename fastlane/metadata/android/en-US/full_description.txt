@@ -1,13 +1,12 @@
-Pick any video from your device and set it as a looping live wallpaper, with separate controls for your home screen and lock screen.
+Pick any video from your device and set it as a looping live wallpaper. Applies to both home screen and lock screen simultaneously — this is how Android live wallpapers work on all devices.
 
 Features:
 * Pick a video using the system file picker
 * Preview it looping before setting it
 * Adjustable playback speed
 * Choose between "fill" (crop to fit) and "fit" (show the whole frame) scaling
-* Set as home screen wallpaper
-* Set as lock screen wallpaper
+* One-tap wallpaper setting
 
 This app contains no ads, no analytics, and no tracking of any kind. It does not request internet access. The only data it stores is a reference to the video you choose, kept locally on your device.
 
-Note: whether your device offers separate "home" and "lock screen" options, or only a combined option, depends on your launcher/device manufacturer's live wallpaper implementation, not on this app.
+Note: the system wallpaper picker may still present a Home / Lock / Both option depending on your device's launcher. This is controlled by your device manufacturer, not by this app — the video will play on whichever surfaces are selected.

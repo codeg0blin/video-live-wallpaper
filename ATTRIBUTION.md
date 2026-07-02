@@ -32,6 +32,7 @@ copied into this repo):
 | [androidx.constraintlayout:constraintlayout](https://developer.android.com/jetpack/androidx/releases/constraintlayout) | 2.1.4 | Apache 2.0 | Layout engine for `activity_main.xml` |
 | [androidx.activity:activity-ktx](https://developer.android.com/jetpack/androidx/releases/activity) | 1.9.0 | Apache 2.0 | `ActivityResultContracts` file-picker API |
 | [androidx.cardview:cardview](https://developer.android.com/jetpack/androidx/releases/cardview) | 1.0.0 | Apache 2.0 | Rounded preview card |
+| [androidx.preference:preference-ktx](https://developer.android.com/jetpack/androidx/releases/preference) | 1.2.1 | Apache 2.0 | Reading/writing saved settings (video URI, speed, crop mode) |
 
 ## Build tooling
 

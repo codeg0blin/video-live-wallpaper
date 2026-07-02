@@ -1,0 +1,1 @@
+Simplified wallpaper setting to a single button. Android live wallpapers apply to both home and lock screen simultaneously — separate per-surface control is not supported by the Android live wallpaper API, so the previous two-button layout was removed. Also adds live wallpaper updates without requiring an app restart, debounced speed slider, and code quality improvements.

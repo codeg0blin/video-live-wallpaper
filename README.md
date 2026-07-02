@@ -1,15 +1,15 @@
 # Video Live Wallpaper
 
 A small Android app that lets you pick any video from your device and set
-it as a looping live wallpaper, with separate buttons for the home screen
-and lock screen.
+it as a looping live wallpaper.
 
 ## Features
 
 - Pick a video with the system file picker
 - Preview it looping (muted) before setting it
-- Set as home screen wallpaper
-- Set as lock screen wallpaper
+- Adjustable playback speed (0.25x–2.0x)
+- Fill or fit crop mode
+- One-tap wallpaper setting — applies to both home and lock screen
 - No ads, no analytics, no network access of any kind
 
 ## How it works
@@ -19,11 +19,9 @@ video using `MediaPlayer`. Setting the wallpaper goes through Android's own
 system picker (`ACTION_CHANGE_LIVE_WALLPAPER`) — this is required by the
 OS for all live wallpaper apps, not just this one.
 
-Note: whether your launcher offers separate "Home" / "Lock screen" / "Both"
-options when you tap one of the buttons is controlled by your device's
-launcher, not by this app. Some OEM launchers (e.g. some TCL, Samsung, or
-MIUI builds) only offer a combined "Home and lock screen" option for live
-wallpapers.
+Live wallpapers on Android apply to both the home screen and lock screen
+simultaneously. Independent control per surface is not supported by the
+Android live wallpaper API on any device.
 
 ## Building
 
