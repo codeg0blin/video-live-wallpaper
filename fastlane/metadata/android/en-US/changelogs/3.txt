@@ -1,0 +1,1 @@
+Bug fix release. Fixed a race condition where the live wallpaper could fail to start under certain timing conditions on some devices, and hardened error handling so a transient playback hiccup no longer clears your selected video. Also disabled app backup, since a saved video reference cannot usefully be restored on a different device.

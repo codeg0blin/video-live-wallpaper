@@ -44,17 +44,18 @@ class VideoWallpaperService : WallpaperService() {
 
         override fun onVisibilityChanged(isVisible: Boolean) {
             visible = isVisible
-            val player = mediaPlayer
-            if (player == null) return
-            try {
-                if (isVisible) {
-                    player.start()
-                } else {
-                    player.pause()
-                }
-            } catch (e: IllegalStateException) {
-                Log.w(TAG, "Player not in a valid state for visibility change", e)
-            }
+            val player = mediaPlayer ?: return
+            // Route through applySpeed rather than calling start()/pause()
+            // directly here. Having two independent call sites (this one and
+            // the one inside preparePlayer's onPreparedListener) both touching
+            // start()/pause() on the same MediaPlayer was racy — if a visibility
+            // change and a prepare-completion landed close together, they could
+            // stack an extra start() on top of one that was still resolving,
+            // which some OEM MediaPlayer implementations (observed on
+            // Adreno/TCL) turn into error -38. Funneling everything through
+            // applySpeed keeps state transitions to one guarded path.
+            val speed = prefs?.getFloat(PREF_PLAYBACK_SPEED, DEFAULT_SPEED) ?: DEFAULT_SPEED
+            applySpeed(player, speed)
         }
 
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
@@ -111,6 +112,25 @@ class VideoWallpaperService : WallpaperService() {
             val speed = prefs?.getFloat(PREF_PLAYBACK_SPEED, DEFAULT_SPEED) ?: DEFAULT_SPEED
             val scalingMode = prefs?.getInt(PREF_SCALING_MODE, DEFAULT_SCALING_MODE) ?: DEFAULT_SCALING_MODE
 
+            // Confirm we still hold read permission before touching MediaPlayer.
+            // Permission can be revoked out from under us at any time (user
+            // action in system settings, storage change, etc.), and without
+            // this check a revoked URI fails silently deep inside setDataSource
+            // with no way for the user to tell why their wallpaper went blank.
+            val stillGranted = try {
+                applicationContext.contentResolver.persistedUriPermissions.any {
+                    it.uri == uri && it.isReadPermission
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to check persisted URI permissions", e)
+                false
+            }
+            if (!stillGranted) {
+                Log.w(TAG, "Lost read permission for stored video URI — clearing selection")
+                prefs?.edit()?.remove(PREF_VIDEO_URI)?.apply()
+                return
+            }
+
             try {
                 val player = MediaPlayer()
                 player.setDataSource(applicationContext, uri)
@@ -120,33 +140,58 @@ class VideoWallpaperService : WallpaperService() {
                 player.setVideoScalingMode(scalingMode)
                 player.setOnPreparedListener {
                     applySpeed(it, speed)
-                    if (visible) {
-                        it.start()
-                    }
                 }
                 player.setOnErrorListener { _, what, extra ->
                     Log.e(TAG, "MediaPlayer error: what=$what extra=$extra")
+                    // Not every MediaPlayer error means the file itself is bad —
+                    // state-machine hiccups (e.g. what=-38, MEDIA_ERROR_UNSUPPORTED
+                    // from an out-of-order start/pause call) are transient and the
+                    // next preparePlayer() call will recover fine. Only clear the
+                    // stored selection for errors that mean the source itself is
+                    // unusable, so we don't wipe a perfectly good video over a
+                    // one-off playback glitch.
+                    if (what == MediaPlayer.MEDIA_ERROR_UNKNOWN || what == -38) {
+                        Log.w(TAG, "Transient MediaPlayer error — leaving selection intact")
+                    } else {
+                        prefs?.edit()?.remove(PREF_VIDEO_URI)?.apply()
+                    }
                     true
                 }
                 player.prepareAsync()
                 mediaPlayer = player
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to prepare video wallpaper", e)
+                prefs?.edit()?.remove(PREF_VIDEO_URI)?.apply()
             }
         }
 
         /**
-         * Speed must be applied via start() on some OEM implementations — setting
-         * PlaybackParams before the player has ever started can silently no-op or
-         * throw on certain devices. Starting first, then applying speed, then
-         * pausing again if not yet visible, is the safe order.
+         * Single guarded entry point for all player state transitions
+         * (start/pause) and speed changes. Called from both onPreparedListener
+         * (right after prepare completes) and onVisibilityChanged (whenever the
+         * wallpaper surface becomes visible/hidden). Must be safe to call
+         * repeatedly and in any order — checking isPlaying before calling
+         * start() avoids restarting an already-running player, which is what
+         * previously caused error -38 on some OEM MediaPlayer implementations
+         * (observed on Adreno/TCL) when two call sites raced.
          */
         private fun applySpeed(player: MediaPlayer, speed: Float) {
-            if (speed == 1.0f) return
             try {
-                player.start()
-                player.playbackParams = PlaybackParams().setSpeed(speed)
-                if (!visible) player.pause()
+                if (visible) {
+                    if (!player.isPlaying) player.start()
+                    if (speed != 1.0f) {
+                        player.playbackParams = PlaybackParams().setSpeed(speed)
+                    }
+                } else {
+                    // PlaybackParams can only be set on a running player on some
+                    // OEM implementations, so briefly start, apply, then pause
+                    // if we're not actually meant to be visible yet.
+                    if (speed != 1.0f && !player.isPlaying) {
+                        player.start()
+                        player.playbackParams = PlaybackParams().setSpeed(speed)
+                    }
+                    if (player.isPlaying) player.pause()
+                }
             } catch (e: IllegalStateException) {
                 Log.w(TAG, "Could not apply playback speed on this device", e)
             }
