@@ -1,4 +1,4 @@
-package com.example.videowallpaper
+package io.github.codeg0blin.videowallpaper
 
 import android.content.SharedPreferences
 import android.media.MediaPlayer
@@ -263,4 +263,3 @@ class VideoWallpaperService : WallpaperService() {
         const val DEFAULT_SCALING_MODE = MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
     }
 }
-

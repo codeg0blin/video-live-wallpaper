@@ -4,15 +4,15 @@ plugins {
 }
 
 android {
-    namespace = "com.example.videowallpaper"
+    namespace = "io.github.codeg0blin.videowallpaper"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.videowallpaper"
+        applicationId = "io.github.codeg0blin.videowallpaper"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.1.2"
+        versionCode = 5
+        versionName = "1.1.3"
     }
 
     buildTypes {

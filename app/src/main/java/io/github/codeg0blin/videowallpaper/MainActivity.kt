@@ -1,4 +1,4 @@
-package com.example.videowallpaper
+package io.github.codeg0blin.videowallpaper
 
 import android.app.WallpaperManager
 import android.content.ComponentName
@@ -16,7 +16,9 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.PreferenceManager
-import com.example.videowallpaper.databinding.ActivityMainBinding
+import io.github.codeg0blin.videowallpaper.R
+import io.github.codeg0blin.videowallpaper.VideoWallpaperService
+import io.github.codeg0blin.videowallpaper.databinding.ActivityMainBinding
 
 /**
  * Lets the user pick a video, preview it, and set it as a live wallpaper
@@ -35,15 +37,15 @@ class MainActivity : AppCompatActivity() {
     // Current preview MediaPlayer, captured so we can re-apply speed when the
     // slider moves without needing to re-prepare the whole VideoView.
     private var previewPlayer: MediaPlayer? = null
-    private var currentSpeed: Float = VideoWallpaperService.DEFAULT_SPEED
-    private var currentScalingMode: Int = VideoWallpaperService.DEFAULT_SCALING_MODE
+    private var currentSpeed: Float = VideoWallpaperService.Companion.DEFAULT_SPEED
+    private var currentScalingMode: Int = VideoWallpaperService.Companion.DEFAULT_SCALING_MODE
 
     // Debounce handler — delays writing speed to prefs until 500ms after the
     // user lifts their finger, so rapid slider adjustments don't each trigger
     // a wallpaper service re-prepare.
     private val speedDebounceHandler = Handler(Looper.getMainLooper())
     private val speedDebounceRunnable = Runnable {
-        prefs.edit().putFloat(VideoWallpaperService.PREF_PLAYBACK_SPEED, currentSpeed).apply()
+        prefs.edit().putFloat(VideoWallpaperService.Companion.PREF_PLAYBACK_SPEED, currentSpeed).apply()
     }
 
     private val pickVideoLauncher =
@@ -58,8 +60,8 @@ class MainActivity : AppCompatActivity() {
 
         prefs = PreferenceManager.getDefaultSharedPreferences(this)
 
-        currentSpeed = prefs.getFloat(VideoWallpaperService.PREF_PLAYBACK_SPEED, VideoWallpaperService.DEFAULT_SPEED)
-        currentScalingMode = prefs.getInt(VideoWallpaperService.PREF_SCALING_MODE, VideoWallpaperService.DEFAULT_SCALING_MODE)
+        currentSpeed = prefs.getFloat(VideoWallpaperService.Companion.PREF_PLAYBACK_SPEED, VideoWallpaperService.Companion.DEFAULT_SPEED)
+        currentScalingMode = prefs.getInt(VideoWallpaperService.Companion.PREF_SCALING_MODE, VideoWallpaperService.Companion.DEFAULT_SCALING_MODE)
 
         setupSpeedControl()
         setupCropControl()
@@ -143,7 +145,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
             }
-            prefs.edit().putInt(VideoWallpaperService.PREF_SCALING_MODE, currentScalingMode).apply()
+            prefs.edit().putInt(VideoWallpaperService.Companion.PREF_SCALING_MODE, currentScalingMode).apply()
             // Crop mode for VideoView itself is controlled by view scaleType,
             // which VideoView doesn't expose directly the way MediaPlayer does
             // for a raw Surface — the preview already fills its card via
@@ -156,7 +158,7 @@ class MainActivity : AppCompatActivity() {
     // --- Video selection -------------------------------------------------
 
     private fun restoreSelection() {
-        val saved = prefs.getString(VideoWallpaperService.PREF_VIDEO_URI, null)
+        val saved = prefs.getString(VideoWallpaperService.Companion.PREF_VIDEO_URI, null)
         if (saved.isNullOrBlank()) return
 
         val uri = try {
@@ -191,7 +193,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         selectedVideoUri = uri
-        prefs.edit().putString(VideoWallpaperService.PREF_VIDEO_URI, uri.toString()).apply()
+        prefs.edit().putString(VideoWallpaperService.Companion.PREF_VIDEO_URI, uri.toString()).apply()
         showPreview(uri)
     }
 
