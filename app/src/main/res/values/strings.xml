@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Video Wallpaper</string>
+    <string name="app_name">Video Live Wallpaper</string>
     <string name="wallpaper_description">Plays your chosen video as a live wallpaper</string>
     <string name="title">Video Live Wallpaper</string>
     <string name="subtitle">Pick a video and set it as your wallpaper. Live wallpapers apply to both home and lock screen.</string>
