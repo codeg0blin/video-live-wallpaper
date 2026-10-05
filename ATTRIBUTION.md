@@ -6,17 +6,41 @@ app's own source code was produced.
 
 ## How the app's source code was written
 
-This app's source code (`MainActivity.kt`, `VideoWallpaperService.kt`, all
-layout/resource XML, and the Gradle build files) was written specifically
-for this project with the help of an AI assistant (Claude, by Anthropic),
-based on a plain-language description of the desired feature set. No code
-was copied from a tutorial, blog post, or another app's repository. All of
-it is original to this project and is released under the license in
-`LICENSE` (Apache License 2.0).
+This app's source code (`MainActivity.kt`, `VideoWallpaperService.kt`,
+`VideoFrameRenderer.kt`, all layout/resource XML, and the Gradle build
+files) was written specifically for this project with the help of an AI
+assistant (Claude, by Anthropic), based on a plain-language description of
+the desired feature set. No code was copied from a tutorial, blog post, or
+another app's repository. All of it is original to this project and is
+released under the license in `LICENSE` (Apache License 2.0).
 
 It uses standard, publicly documented Android SDK and AndroidX APIs in the
 ordinary way any Android app would — see the dependency list below for
 exactly which libraries are linked in.
+
+### `VideoFrameRenderer.kt` specifically
+
+This file implements a small EGL/OpenGL ES 2.0 pipeline (MediaPlayer
+decodes into a `SurfaceTexture`, a shader draws it into the wallpaper's
+`Surface` with Fill/Fit crop or letterbox geometry), added to fix scaling
+modes that don't work on a `WallpaperService` surface — see issue #1 for
+the background. No code was copied into this file from anywhere. Two
+things from outside this repo informed how it was written, noted here for
+transparency since the document's purpose is to say where ideas and code
+came from, not just libraries:
+
+- **`Gles2WatchFaceService`**, part of the Android Wear platform APIs,
+  confirmed that rendering via a manually-created EGL window surface
+  bound to a `WallpaperService`/watch face Engine's `Surface` is an
+  officially supported pattern on Android, before this file was written
+  against that pattern from scratch.
+- **[alynx-live-wallpaper](https://github.com/AlynxZhou/alynx-live-wallpaper)**
+  (Apache License 2.0) and **[kinewall](https://github.com/eaangrino/kinewall-video-wallpaper-android)**,
+  two other open-source Android video wallpaper apps, were consulted
+  (via their public descriptions/READMEs, not their source) to confirm
+  that a MediaPlayer → SurfaceTexture → OpenGL renderer architecture is
+  a workable, precedented solution to this class of problem, before this
+  file's own independent implementation was written.
 
 ## Runtime dependencies (linked into the app)
 
@@ -51,6 +75,8 @@ device already provides:
 - `android.media.MediaPlayer` — video decode/playback
 - `android.app.WallpaperManager` — system "set wallpaper" intent
 - `android.content.ContentResolver` (`takePersistableUriPermission`) — durable file access from the picker
+- `android.opengl.EGL14` / `android.opengl.GLES20` / `android.opengl.GLES11Ext` — EGL context and OpenGL ES 2.0 drawing, used by `VideoFrameRenderer.kt` to render video with correct Fill/Fit scaling
+- `android.graphics.SurfaceTexture` — receives decoded video frames as a GL texture
 
 ## What this app does NOT include
 
