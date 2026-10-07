@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.codeg0blin.videowallpaper"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.2.1"
+        versionCode = 10
+        versionName = "1.3.0"
     }
 
     buildTypes {
@@ -48,4 +48,6 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.0")
     implementation("androidx.cardview:cardview:1.0.0")
     implementation("androidx.preference:preference-ktx:1.2.1")
+
+    testImplementation("junit:junit:4.13.2")
 }

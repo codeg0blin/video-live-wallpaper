@@ -1,18 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Video Live Wallpaper</string>
-    <string name="wallpaper_description">Plays your chosen video as a live wallpaper</string>
+    <string name="wallpaper_description">Plays your chosen video or GIF as a live wallpaper</string>
     <string name="title">Video Live Wallpaper</string>
-    <string name="subtitle">Pick a video and set it as your wallpaper. Live wallpapers apply to both home and lock screen.</string>
-    <string name="pick_video">Choose Video</string>
-    <string name="no_video_selected">No video selected</string>
+    <string name="subtitle">Pick a video or GIF and set it as your wallpaper. Live wallpapers apply to both home and lock screen.</string>
+    <string name="pick_video">Choose Video or GIF</string>
+    <string name="no_video_selected">No video or GIF selected</string>
     <string name="set_wallpaper">Set as Wallpaper</string>
-    <string name="select_video_first">Please choose a video first</string>
+    <string name="select_video_first">Please choose a video or GIF first</string>
     <string name="error_live_wallpaper_unavailable">Live wallpapers aren\'t supported on this device</string>
     <string name="speed_label">Playback speed</string>
     <string name="speed_default_display">1.0x</string>
     <string name="crop_label">Crop mode</string>
     <string name="crop_fill">Fill (crop edges)</string>
     <string name="crop_fit">Fit (show all, may letterbox)</string>
+    <string name="gif_preview_description">Preview of the selected GIF</string>
+    <string name="error_gif_unusable">That GIF couldn\'t be loaded. It may be damaged or too large.</string>
+    <string name="version_format">v%1$s</string>
 
 </resources>
