@@ -159,7 +159,8 @@
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:text="@string/crop_fill"
-            android:textColor="@color/text_primary"
+            android:textColor="@color/toggle_text"
+            app:backgroundTint="@color/toggle_bg"
             android:textSize="11sp"
             app:strokeColor="@color/accent" />
 
@@ -172,7 +173,8 @@
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:text="@string/crop_fit"
-            android:textColor="@color/text_primary"
+            android:textColor="@color/toggle_text"
+            app:backgroundTint="@color/toggle_bg"
             android:textSize="11sp"
             app:strokeColor="@color/accent" />
 

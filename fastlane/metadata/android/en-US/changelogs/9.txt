@@ -1,0 +1,1 @@
+Fixes unreadable text on the selected Fill/Fit button. Release builds no longer embed Android Gradle Plugin's dependency metadata block, which F-Droid treats as an opaque binary. No other functional changes. Store listing text and screenshots have also been refreshed.

@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.codeg0blin.videowallpaper"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.2.0"
+        versionCode = 9
+        versionName = "1.2.1"
     }
 
     buildTypes {
@@ -34,6 +34,10 @@ android {
     buildFeatures {
         viewBinding = true
     }
+    dependenciesInfo {
+       includeInApk = false
+       includeInBundle = false
+   }
 }
 
 dependencies {
