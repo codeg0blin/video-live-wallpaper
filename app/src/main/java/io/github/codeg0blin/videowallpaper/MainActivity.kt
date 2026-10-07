@@ -3,6 +3,7 @@ package io.github.codeg0blin.videowallpaper
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.SharedPreferences
 import android.media.MediaPlayer
 import android.media.PlaybackParams
@@ -67,6 +68,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.versionText.text = getString(R.string.version_format, appVersionName())
 
         prefs = PreferenceManager.getDefaultSharedPreferences(this)
         gifPreview = GifPreview(binding.previewGif)
@@ -90,6 +92,14 @@ class MainActivity : AppCompatActivity() {
         binding.setWallpaperButton.setOnClickListener {
             launchLiveWallpaperPicker()
         }
+    }
+
+    /** The installed app's own versionName, so the on-screen label can't drift from build.gradle.kts. */
+    @Suppress("DEPRECATION")
+    private fun appVersionName(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+    } catch (e: PackageManager.NameNotFoundException) {
+        ""
     }
 
     // --- Speed control -------------------------------------------------

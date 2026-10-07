@@ -1,14 +1,17 @@
-Pick any video from your device and set it as a looping live wallpaper.
+Pick any video or animated GIF from your device and set it as a looping live wallpaper.
 
 Features:
-* Pick a video using the system file picker
+* Pick a video or GIF using the system file picker
 * Preview it looping (muted) before setting it
 * Adjustable playback speed (0.25x to 2.0x)
-* Choose between "fill" (crop to cover the screen) and "fit" (show the whole frame, with letterboxing if needed) scaling
+* Choose between "fill" (crop to cover the screen) and "fit" (show the whole frame, with letterboxing if needed) scaling, in both the preview and the wallpaper
+* Portrait phone videos display the right way up
 * One-tap wallpaper setting through Android's own live wallpaper picker
 
-Android applies a live wallpaper to the home screen and lock screen together. This is a limitation of the Android live wallpaper API, not of this app. Some devices' system pickers may offer extra choices; if yours does, the video plays on whichever screens you select.
+GIF notes: transparent areas appear black, and GIF files over 50 MB are not supported.
 
-Privacy: this app contains no ads, no analytics and no tracking. It does not request internet access. The only data it stores is a reference to the video you choose, kept locally on your device.
+Android applies a live wallpaper to the home screen and lock screen together. This is a limitation of the Android live wallpaper API, not of this app. Some devices' system pickers may offer extra choices; if yours does, the wallpaper plays on whichever screens you select.
+
+Privacy: this app contains no ads, no analytics and no tracking. It does not request internet access. The only data it stores is a reference to the video or GIF you choose, kept locally on your device.
 
 Free and open source software, released under the Apache License 2.0.

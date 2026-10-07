@@ -7,11 +7,12 @@ app's own source code was produced.
 ## How the app's source code was written
 
 This app's source code (`MainActivity.kt`, `VideoWallpaperService.kt`,
-`VideoFrameRenderer.kt`, all layout/resource XML, and the Gradle build
-files) was written specifically for this project with the help of an AI
-assistant (Claude, by Anthropic), based on a plain-language description of
-the desired feature set. No code was copied from a tutorial, blog post, or
-another app's repository. All of it is original to this project and is
+`VideoFrameRenderer.kt`, `GifDecoder.kt`, `GifPlayer.kt`, `GifFiles.kt`,
+`GifPreview.kt`, the unit tests, all layout/resource XML, and the Gradle
+build files) was written specifically for this project with the help of an
+AI assistant (Claude, by Anthropic), based on a plain-language description
+of the desired feature set. No code was copied from a tutorial, blog post,
+or another app's repository. All of it is original to this project and is
 released under the license in `LICENSE` (Apache License 2.0).
 
 It uses standard, publicly documented Android SDK and AndroidX APIs in the
@@ -24,10 +25,15 @@ This file implements a small EGL/OpenGL ES 2.0 pipeline (MediaPlayer
 decodes into a `SurfaceTexture`, a shader draws it into the wallpaper's
 `Surface` with Fill/Fit crop or letterbox geometry), added to fix scaling
 modes that don't work on a `WallpaperService` surface — see issue #1 for
-the background. No code was copied into this file from anywhere. Two
-things from outside this repo informed how it was written, noted here for
-transparency since the document's purpose is to say where ideas and code
-came from, not just libraries:
+the background. Since version 1.3.0 the video shader also applies the
+transform matrix that `SurfaceTexture` provides for each frame
+(`SurfaceTexture.getTransformMatrix`), which carries the video's rotation
+tag, so portrait phone recordings display upright; this is the documented
+use of that API. The same file also draws GIF frames (see below) with a
+second, plain `GL_TEXTURE_2D` shader. No code was copied into this file
+from anywhere. Two things from outside this repo informed how it was
+written, noted here for transparency since the document's purpose is to say
+where ideas and code came from, not just libraries:
 
 - **`Gles2WatchFaceService`**, part of the Android Wear platform APIs,
   confirmed that rendering via a manually-created EGL window surface
@@ -41,6 +47,24 @@ came from, not just libraries:
   that a MediaPlayer → SurfaceTexture → OpenGL renderer architecture is
   a workable, precedented solution to this class of problem, before this
   file's own independent implementation was written.
+
+### GIF support (`GifDecoder.kt`, `GifPlayer.kt`, `GifFiles.kt`, `GifPreview.kt`)
+
+Added in version 1.3.0 for issue #2. `GifDecoder.kt` is a small GIF
+decoder written from the public GIF87a/GIF89a file format specification
+(block structure, LZW decompression, interlacing, transparency and
+disposal methods). It is plain Kotlin with no Android or third-party
+imports, so it can be unit-tested on an ordinary JVM. No code was copied
+into it from anywhere, and the app links no GIF library.
+
+- Issue #2 mentioned **[redwarp/gif-wallpaper](https://github.com/redwarp/gif-wallpaper)**
+  as an example of an existing open-source GIF wallpaper app. Its source
+  code was not consulted or used for this work.
+- During development the decoder's output was cross-checked against the
+  frames that the Pillow imaging library (a development-time Python tool,
+  not part of this app or repository) decoded from generated test GIFs.
+  The repository's own unit tests build their GIF files in code, so no
+  binary test files are checked in.
 
 ## Runtime dependencies (linked into the app)
 
@@ -56,7 +80,16 @@ copied into this repo):
 | [androidx.constraintlayout:constraintlayout](https://developer.android.com/jetpack/androidx/releases/constraintlayout) | 2.1.4 | Apache 2.0 | Layout engine for `activity_main.xml` |
 | [androidx.activity:activity-ktx](https://developer.android.com/jetpack/androidx/releases/activity) | 1.9.0 | Apache 2.0 | `ActivityResultContracts` file-picker API |
 | [androidx.cardview:cardview](https://developer.android.com/jetpack/androidx/releases/cardview) | 1.0.0 | Apache 2.0 | Rounded preview card |
-| [androidx.preference:preference-ktx](https://developer.android.com/jetpack/androidx/releases/preference) | 1.2.1 | Apache 2.0 | Reading/writing saved settings (video URI, speed, crop mode) |
+| [androidx.preference:preference-ktx](https://developer.android.com/jetpack/androidx/releases/preference) | 1.2.1 | Apache 2.0 | Reading/writing saved settings (video/GIF URI, speed, crop mode) |
+
+## Test-only dependencies (not included in the app)
+
+Used only when running `./gradlew test` on a developer machine. They are
+not part of the APK, and release builds do not need them.
+
+| Library | Version | License | Purpose |
+|---|---|---|---|
+| [junit:junit](https://junit.org/junit4/) | 4.13.2 | Eclipse Public License 1.0 | Unit tests for `GifDecoder.kt` |
 
 ## Build tooling
 
@@ -75,8 +108,10 @@ device already provides:
 - `android.media.MediaPlayer` — video decode/playback
 - `android.app.WallpaperManager` — system "set wallpaper" intent
 - `android.content.ContentResolver` (`takePersistableUriPermission`) — durable file access from the picker
-- `android.opengl.EGL14` / `android.opengl.GLES20` / `android.opengl.GLES11Ext` — EGL context and OpenGL ES 2.0 drawing, used by `VideoFrameRenderer.kt` to render video with correct Fill/Fit scaling
-- `android.graphics.SurfaceTexture` — receives decoded video frames as a GL texture
+- `android.opengl.EGL14` / `android.opengl.GLES20` / `android.opengl.GLES11Ext` / `android.opengl.GLUtils` — EGL context and OpenGL ES 2.0 drawing, used by `VideoFrameRenderer.kt` to render video and GIF frames with correct Fill/Fit scaling
+- `android.graphics.SurfaceTexture` — receives decoded video frames as a GL texture, and supplies each frame's transform matrix
+- `android.graphics.Bitmap` — holds decoded GIF frames for upload to the GL texture and for the in-app GIF preview
+- `android.os.Handler` / `android.os.HandlerThread` — schedule GIF frames and keep decoding off the main thread
 
 ## What this app does NOT include
 
@@ -87,8 +122,11 @@ auditing the repo:
 - No advertising SDKs or ad network code
 - No network permissions of any kind — the app never connects to the internet
 - No proprietary/closed-source libraries
+- No third-party GIF, image-loading or video libraries — GIF decoding is
+  done by the app's own code
 - No tracking of any kind; the only persisted data is the URI of the video
-  you pick, stored locally in `SharedPreferences` on your own device
+  or GIF you pick, plus your speed and crop settings, stored locally in
+  `SharedPreferences` on your own device
 
 ## License
 
