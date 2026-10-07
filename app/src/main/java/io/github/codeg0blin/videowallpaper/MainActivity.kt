@@ -11,6 +11,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.view.Gravity
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.Toast
@@ -20,6 +22,9 @@ import androidx.preference.PreferenceManager
 import io.github.codeg0blin.videowallpaper.R
 import io.github.codeg0blin.videowallpaper.VideoWallpaperService
 import io.github.codeg0blin.videowallpaper.databinding.ActivityMainBinding
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Lets the user pick a video, preview it, and set it as a live wallpaper
@@ -65,6 +70,11 @@ class MainActivity : AppCompatActivity() {
 
         prefs = PreferenceManager.getDefaultSharedPreferences(this)
         gifPreview = GifPreview(binding.previewGif)
+        binding.previewFrame.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+                applyCropToVideoPreview()
+            }
+        }
 
         currentSpeed = prefs.getFloat(VideoWallpaperService.Companion.PREF_PLAYBACK_SPEED, VideoWallpaperService.Companion.DEFAULT_SPEED)
         currentScalingMode = prefs.getInt(VideoWallpaperService.Companion.PREF_SCALING_MODE, VideoWallpaperService.Companion.DEFAULT_SCALING_MODE)
@@ -154,6 +164,7 @@ class MainActivity : AppCompatActivity() {
             }
             prefs.edit().putInt(VideoWallpaperService.Companion.PREF_SCALING_MODE, currentScalingMode).apply()
             applyCropToGifPreview()
+            applyCropToVideoPreview()
             // Crop mode for VideoView itself is controlled by view scaleType,
             // which VideoView doesn't expose directly the way MediaPlayer does
             // for a raw Surface — the preview already fills its card via
@@ -210,6 +221,46 @@ class MainActivity : AppCompatActivity() {
         selectedVideoUri = uri
         prefs.edit().putString(VideoWallpaperService.Companion.PREF_VIDEO_URI, uri.toString()).apply()
         showPreview(uri)
+    }
+
+    // --- Video preview crop ------------------------------------------------
+
+    /**
+     * Makes the video preview show the chosen crop mode the way the wallpaper
+     * does. VideoView always fits the whole picture inside its own bounds, so
+     * rather than replacing it, we size the view itself: for Fit it is the
+     * largest size that fits the preview card, for Fill the smallest size
+     * that covers it, and the card (the parent frame) clips whatever sticks
+     * out. The size keeps the video's aspect ratio, so VideoView adds no
+     * letterboxing of its own. Does nothing until the player knows the
+     * video's size and the frame has been laid out.
+     */
+    private fun applyCropToVideoPreview() {
+        val player = previewPlayer ?: return
+        val frame = binding.previewFrame
+        val videoW = try { player.videoWidth } catch (e: IllegalStateException) { 0 }
+        val videoH = try { player.videoHeight } catch (e: IllegalStateException) { 0 }
+        val frameW = frame.width
+        val frameH = frame.height
+        if (videoW <= 0 || videoH <= 0 || frameW <= 0 || frameH <= 0) return
+
+        val scaleX = frameW.toFloat() / videoW
+        val scaleY = frameH.toFloat() / videoH
+        val scale = if (currentScalingMode == MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT) {
+            min(scaleX, scaleY)
+        } else {
+            max(scaleX, scaleY)
+        }
+        val width = (videoW * scale).roundToInt()
+        val height = (videoH * scale).roundToInt()
+
+        val params = binding.previewVideo.layoutParams as? FrameLayout.LayoutParams ?: return
+        if (params.width != width || params.height != height || params.gravity != Gravity.CENTER) {
+            params.width = width
+            params.height = height
+            params.gravity = Gravity.CENTER
+            binding.previewVideo.layoutParams = params
+        }
     }
 
     // --- GIF preview ------------------------------------------------------
@@ -292,6 +343,7 @@ class MainActivity : AppCompatActivity() {
             mp.isLooping = true
             mp.setVolume(0f, 0f)
             previewPlayer = mp
+            applyCropToVideoPreview()
             binding.previewVideo.start()
             applySpeedToPreview(currentSpeed)
         }

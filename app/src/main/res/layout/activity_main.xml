@@ -49,6 +49,7 @@
         app:layout_constraintHeight_min="100dp" />
 
     <FrameLayout
+        android:id="@+id/previewFrame"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintTop_toTopOf="@id/previewCard"
