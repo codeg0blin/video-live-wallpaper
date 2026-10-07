@@ -10,7 +10,6 @@ import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.SurfaceHolder
 import androidx.preference.PreferenceManager
-import java.io.ByteArrayOutputStream
 import java.io.IOException
 
 /**
@@ -291,7 +290,7 @@ class VideoWallpaperService : WallpaperService() {
                 return
             }
 
-            if (looksLikeGif(uri)) {
+            if (GifFiles.looksLikeGif(applicationContext.contentResolver, uri)) {
                 prepareGif(uri, speed)
                 return
             }
@@ -366,30 +365,6 @@ class VideoWallpaperService : WallpaperService() {
         }
 
         /**
-         * True if the first bytes of [uri]'s content are a GIF signature.
-         * Sniffing the content (rather than trusting a MIME type) means files
-         * with a wrong or missing type still work. Any failure to read
-         * counts as "not a GIF" so the normal video path handles the error.
-         */
-        private fun looksLikeGif(uri: Uri): Boolean {
-            return try {
-                applicationContext.contentResolver.openInputStream(uri)?.use { input ->
-                    val header = ByteArray(6)
-                    var read = 0
-                    while (read < header.size) {
-                        val n = input.read(header, read, header.size - read)
-                        if (n < 0) break
-                        read += n
-                    }
-                    read == header.size && GifDecoder.hasGifSignature(header)
-                } ?: false
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not sniff selected file type", e)
-                false
-            }
-        }
-
-        /**
          * Loads and starts a GIF wallpaper. File reading and parsing happen
          * on the render thread (GIFs can be several MB), and playback is
          * driven entirely from there. Needs the renderer; without one (GL
@@ -405,7 +380,7 @@ class VideoWallpaperService : WallpaperService() {
             handler.post {
                 if (generation != prepareGeneration) return@post
                 val gif = try {
-                    GifDecoder.parse(readGifBytes(uri))
+                    GifDecoder.parse(GifFiles.readBytes(applicationContext.contentResolver, uri))
                 } catch (e: GifFormatException) {
                     // The file itself is unusable — same treatment as a bad video source.
                     Log.e(TAG, "Selected GIF could not be decoded — clearing selection", e)
@@ -427,25 +402,6 @@ class VideoWallpaperService : WallpaperService() {
                 player.setSpeed(speed)
                 gifPlayer = player
                 if (visible) player.start()
-            }
-        }
-
-        /** Reads the whole GIF into memory, refusing files over [MAX_GIF_BYTES]. */
-        private fun readGifBytes(uri: Uri): ByteArray {
-            val input = applicationContext.contentResolver.openInputStream(uri)
-                ?: throw IOException("Could not open $uri")
-            input.use {
-                val out = ByteArrayOutputStream()
-                val buffer = ByteArray(64 * 1024)
-                var total = 0
-                while (true) {
-                    val n = it.read(buffer)
-                    if (n < 0) break
-                    total += n
-                    if (total > MAX_GIF_BYTES) throw GifFormatException("GIF file is too large")
-                    out.write(buffer, 0, n)
-                }
-                return out.toByteArray()
             }
         }
 
@@ -582,9 +538,6 @@ class VideoWallpaperService : WallpaperService() {
     companion object {
         private const val TAG = "VideoWallpaperService"
         private const val MAX_CONSECUTIVE_ERROR_RETRIES = 3
-
-        /** Largest GIF file we will load into memory. */
-        private const val MAX_GIF_BYTES = 50 * 1024 * 1024
         const val PREF_VIDEO_URI = "selected_video_uri"
         const val PREF_PLAYBACK_SPEED = "playback_speed"
         const val PREF_SCALING_MODE = "scaling_mode"
