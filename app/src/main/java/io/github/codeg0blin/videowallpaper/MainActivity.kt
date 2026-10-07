@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,6 +34,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var prefs: SharedPreferences
     private var selectedVideoUri: Uri? = null
+
+    // In-app preview for GIFs (video keeps using the VideoView).
+    private lateinit var gifPreview: GifPreview
+    private var showingGif = false
 
     // Current preview MediaPlayer, captured so we can re-apply speed when the
     // slider moves without needing to re-prepare the whole VideoView.
@@ -59,6 +64,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        gifPreview = GifPreview(binding.previewGif)
 
         currentSpeed = prefs.getFloat(VideoWallpaperService.Companion.PREF_PLAYBACK_SPEED, VideoWallpaperService.Companion.DEFAULT_SPEED)
         currentScalingMode = prefs.getInt(VideoWallpaperService.Companion.PREF_SCALING_MODE, VideoWallpaperService.Companion.DEFAULT_SCALING_MODE)
@@ -68,7 +74,7 @@ class MainActivity : AppCompatActivity() {
         restoreSelection()
 
         binding.pickButton.setOnClickListener {
-            pickVideoLauncher.launch(arrayOf("video/*"))
+            pickVideoLauncher.launch(arrayOf("video/*", "image/gif"))
         }
 
         binding.setWallpaperButton.setOnClickListener {
@@ -97,6 +103,7 @@ class MainActivity : AppCompatActivity() {
                 if (fromUser) {
                     currentSpeed = speed
                     applySpeedToPreview(speed)
+                    gifPreview.setSpeed(speed)
                 }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {
@@ -146,6 +153,7 @@ class MainActivity : AppCompatActivity() {
                 MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
             }
             prefs.edit().putInt(VideoWallpaperService.Companion.PREF_SCALING_MODE, currentScalingMode).apply()
+            applyCropToGifPreview()
             // Crop mode for VideoView itself is controlled by view scaleType,
             // which VideoView doesn't expose directly the way MediaPlayer does
             // for a raw Surface — the preview already fills its card via
@@ -192,12 +200,91 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        if (GifFiles.looksLikeGif(contentResolver, uri)) {
+            // Validate before committing, so a damaged or oversized GIF never
+            // replaces a working selection.
+            loadGifPreview(uri, persistSelection = true)
+            return
+        }
+
         selectedVideoUri = uri
         prefs.edit().putString(VideoWallpaperService.Companion.PREF_VIDEO_URI, uri.toString()).apply()
         showPreview(uri)
     }
 
+    // --- GIF preview ------------------------------------------------------
+
+    private fun applyCropToGifPreview() {
+        binding.previewGif.scaleType =
+            if (currentScalingMode == MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT) {
+                ImageView.ScaleType.FIT_CENTER
+            } else {
+                ImageView.ScaleType.CENTER_CROP
+            }
+    }
+
+    /**
+     * Loads [uri] as a GIF in the background. On success it becomes the
+     * selection (saved to prefs only when [persistSelection] is true, i.e.
+     * the user just picked it) and the preview switches to the GIF. On
+     * failure the previous selection and preview are left alone.
+     */
+    private fun loadGifPreview(uri: Uri, persistSelection: Boolean) {
+        gifPreview.load(contentResolver, uri) { ok ->
+            if (!ok) {
+                if (persistSelection) {
+                    Toast.makeText(this, getString(R.string.error_gif_unusable), Toast.LENGTH_LONG).show()
+                    // Give back the permission we took for a file we won't use,
+                    // unless it is the file already selected.
+                    if (uri != selectedVideoUri) {
+                        try {
+                            contentResolver.releasePersistableUriPermission(
+                                uri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        } catch (e: SecurityException) {
+                            // Nothing to release.
+                        }
+                    }
+                } else {
+                    // Restoring a saved selection that no longer loads: treat as no selection.
+                    selectedVideoUri = null
+                }
+                return@load
+            }
+
+            selectedVideoUri = uri
+            if (persistSelection) {
+                prefs.edit().putString(VideoWallpaperService.Companion.PREF_VIDEO_URI, uri.toString()).apply()
+            }
+            showingGif = true
+
+            binding.previewVideo.stopPlayback()
+            binding.previewVideo.visibility = View.GONE
+            previewPlayer = null
+            binding.noVideoText.visibility = View.GONE
+            binding.previewGif.visibility = View.VISIBLE
+            applyCropToGifPreview()
+            gifPreview.setSpeed(currentSpeed)
+            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+                gifPreview.start()
+            }
+            binding.setWallpaperButton.isEnabled = true
+        }
+    }
+
     private fun showPreview(uri: Uri) {
+        if (GifFiles.looksLikeGif(contentResolver, uri)) {
+            loadGifPreview(uri, persistSelection = false)
+        } else {
+            showVideoPreview(uri)
+        }
+    }
+
+    private fun showVideoPreview(uri: Uri) {
+        showingGif = false
+        gifPreview.stop()
+        binding.previewGif.visibility = View.GONE
         binding.noVideoText.visibility = View.GONE
         binding.previewVideo.visibility = View.VISIBLE
         binding.previewVideo.setVideoURI(uri)
@@ -233,6 +320,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (showingGif) {
+            gifPreview.start()
+            return
+        }
         selectedVideoUri?.let {
             if (!binding.previewVideo.isPlaying) {
                 binding.previewVideo.start()
@@ -242,14 +333,21 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        gifPreview.pause()
         if (binding.previewVideo.isPlaying) {
             binding.previewVideo.pause()
         }
-        previewPlayer = null
+        // previewPlayer is deliberately kept: VideoView reuses the same
+        // MediaPlayer when the activity resumes, and clearing it here left
+        // the speed slider with nothing to control until a new video was
+        // picked. If VideoView does release its player (surface destroyed),
+        // its prepared listener runs again and replaces this reference, and
+        // applySpeedToPreview already tolerates a stale player.
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        gifPreview.release()
         speedDebounceHandler.removeCallbacks(speedDebounceRunnable)
     }
 }

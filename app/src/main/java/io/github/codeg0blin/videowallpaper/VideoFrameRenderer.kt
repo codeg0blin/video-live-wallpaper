@@ -1,5 +1,6 @@
 package io.github.codeg0blin.videowallpaper
 
+import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.opengl.EGL14
 import android.opengl.EGLConfig
@@ -8,6 +9,7 @@ import android.opengl.EGLDisplay
 import android.opengl.EGLSurface
 import android.opengl.GLES11Ext
 import android.opengl.GLES20
+import android.opengl.GLUtils
 import android.util.Log
 import android.view.Surface
 
@@ -49,7 +51,37 @@ class VideoFrameRenderer {
     private var positionHandle: Int = -1
     private var texCoordHandle: Int = -1
     private var textureUniformHandle: Int = -1
+    private var texMatrixHandle: Int = -1
+
+    // SurfaceTexture's transform for the latest video frame. It carries the
+    // video's rotation tag (portrait phone clips are usually stored sideways
+    // with a "rotate 90" flag), its vertical flip, and any codec padding
+    // crop. Starts as the plain vertical flip, which is what an upright,
+    // unpadded video produces, so behaviour before the first frame is
+    // unchanged. Column-major, as GL expects.
+    private val texMatrix = floatArrayOf(
+        1f, 0f, 0f, 0f,
+        0f, -1f, 0f, 0f,
+        0f, 0f, 1f, 0f,
+        0f, 1f, 0f, 1f
+    )
     private var vertexBuffer: java.nio.FloatBuffer? = null
+
+    // GIF support (issue #2). GIF frames arrive as plain ARGB pixels from
+    // GifDecoder rather than from MediaPlayer, so they need an ordinary
+    // GL_TEXTURE_2D plus a shader that samples a sampler2D instead of
+    // samplerExternalOES. Everything here is created lazily on the first
+    // uploadGifFrame() call, so video-only users never pay for it and the
+    // existing video path above is untouched. Geometry (Fill/Fit) reuses
+    // updateGeometry() and its cache variables below.
+    private var gifProgram: Int = 0
+    private var gifPositionHandle: Int = -1
+    private var gifTexCoordHandle: Int = -1
+    private var gifTextureUniformHandle: Int = -1
+    private var gifTextureId: Int = 0
+    private var gifBitmap: Bitmap? = null
+    private var gifTextureWidth: Int = 0
+    private var gifTextureHeight: Int = 0
 
     // Chunk 4: Fill/Fit scaling. Geometry is only recomputed when the
     // video size, viewport size, or mode actually changes — not on every
@@ -238,6 +270,7 @@ class VideoFrameRenderer {
 
         if (frameAvailable) {
             texture.updateTexImage()
+            texture.getTransformMatrix(texMatrix)
             frameAvailable = false
         }
 
@@ -258,6 +291,7 @@ class VideoFrameRenderer {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
 
         GLES20.glUseProgram(shaderProgram)
+        GLES20.glUniformMatrix4fv(texMatrixHandle, 1, false, texMatrix, 0)
 
         val buffer = vertexBuffer ?: return
         buffer.position(0)
@@ -379,7 +413,7 @@ class VideoFrameRenderer {
      * xy + texture coordinate uv, interleaved).
      */
     private fun createShaderProgram(): Boolean {
-        val vertexShader = compileShader(GLES20.GL_VERTEX_SHADER, VERTEX_SHADER_SRC)
+        val vertexShader = compileShader(GLES20.GL_VERTEX_SHADER, VIDEO_VERTEX_SHADER_SRC)
         if (vertexShader == 0) return false
         val fragmentShader = compileShader(GLES20.GL_FRAGMENT_SHADER, FRAGMENT_SHADER_SRC)
         if (fragmentShader == 0) {
@@ -414,7 +448,8 @@ class VideoFrameRenderer {
         positionHandle = GLES20.glGetAttribLocation(program, "aPosition")
         texCoordHandle = GLES20.glGetAttribLocation(program, "aTexCoord")
         textureUniformHandle = GLES20.glGetUniformLocation(program, "uTexture")
-        if (positionHandle < 0 || texCoordHandle < 0 || textureUniformHandle < 0) {
+        texMatrixHandle = GLES20.glGetUniformLocation(program, "uTexMatrix")
+        if (positionHandle < 0 || texCoordHandle < 0 || textureUniformHandle < 0 || texMatrixHandle < 0) {
             Log.e(TAG, "Failed to get shader attribute/uniform locations")
             return false
         }
@@ -456,6 +491,177 @@ class VideoFrameRenderer {
         return shader
     }
 
+    /**
+     * Uploads one decoded GIF frame ([argbPixels], row-major, [width] x
+     * [height], top row first) into the GIF texture, creating the shader
+     * program, texture and staging bitmap on first use and re-creating them
+     * if the frame size changes. Does not draw; call [drawGifFrame]
+     * afterwards. Must be called on the render thread with our EGL context
+     * current. Returns false if GL setup failed (caller should stop using
+     * the GIF path rather than retry every frame).
+     */
+    fun uploadGifFrame(argbPixels: IntArray, width: Int, height: Int): Boolean {
+        if (width <= 0 || height <= 0 || argbPixels.size < width * height) return false
+        if (eglDisplay == EGL14.EGL_NO_DISPLAY) return false
+        if (gifProgram == 0 && !createGifProgram()) {
+            Log.e(TAG, "Failed to create GIF shader program")
+            return false
+        }
+
+        val needsAllocation = gifTextureId == 0 || gifBitmap == null ||
+            gifTextureWidth != width || gifTextureHeight != height
+        if (needsAllocation) {
+            releaseGifTexture()
+            val textures = IntArray(1)
+            GLES20.glGenTextures(1, textures, 0)
+            if (textures[0] == 0) {
+                Log.e(TAG, "glGenTextures returned 0 for GIF texture")
+                return false
+            }
+            gifTextureId = textures[0]
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, gifTextureId)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+            // CLAMP_TO_EDGE and no mipmaps are required for non-power-of-two
+            // textures in OpenGL ES 2.0, and GIFs are rarely power-of-two.
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+            gifBitmap = try {
+                Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            } catch (e: OutOfMemoryError) {
+                Log.e(TAG, "Out of memory allocating ${width}x$height GIF bitmap", e)
+                releaseGifTexture()
+                return false
+            }
+            gifTextureWidth = width
+            gifTextureHeight = height
+        }
+
+        val bitmap = gifBitmap ?: return false
+        bitmap.setPixels(argbPixels, 0, width, 0, 0, width, height)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, gifTextureId)
+        if (needsAllocation) {
+            GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
+        } else {
+            GLUtils.texSubImage2D(GLES20.GL_TEXTURE_2D, 0, 0, 0, bitmap)
+        }
+        return true
+    }
+
+    /**
+     * Draws the most recently uploaded GIF frame with the current Fill/Fit
+     * mode and presents it. Same geometry rules as [drawFrame], using the
+     * GIF's own size as the "video" size. Does nothing until
+     * [uploadGifFrame] has succeeded at least once. Must be called on the
+     * render thread with our EGL context current.
+     */
+    fun drawGifFrame(viewportWidth: Int, viewportHeight: Int) {
+        if (gifProgram == 0 || gifTextureId == 0) return
+        if (viewportWidth <= 0 || viewportHeight <= 0) return
+
+        val gifW = gifTextureWidth
+        val gifH = gifTextureHeight
+        if (gifW != lastVideoWidth || gifH != lastVideoHeight ||
+            viewportWidth != lastViewportWidth || viewportHeight != lastViewportHeight ||
+            scalingMode != lastScalingMode
+        ) {
+            updateGeometry(viewportWidth, viewportHeight, gifW, gifH)
+            lastVideoWidth = gifW
+            lastVideoHeight = gifH
+            lastViewportWidth = viewportWidth
+            lastViewportHeight = viewportHeight
+            lastScalingMode = scalingMode
+        }
+
+        GLES20.glViewport(0, 0, viewportWidth, viewportHeight)
+        GLES20.glClearColor(0f, 0f, 0f, 1f)
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+
+        GLES20.glUseProgram(gifProgram)
+
+        val buffer = vertexBuffer ?: return
+        buffer.position(0)
+        GLES20.glVertexAttribPointer(
+            gifPositionHandle, 2, GLES20.GL_FLOAT, false, STRIDE_BYTES, buffer
+        )
+        GLES20.glEnableVertexAttribArray(gifPositionHandle)
+
+        buffer.position(2)
+        GLES20.glVertexAttribPointer(
+            gifTexCoordHandle, 2, GLES20.GL_FLOAT, false, STRIDE_BYTES, buffer
+        )
+        GLES20.glEnableVertexAttribArray(gifTexCoordHandle)
+
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, gifTextureId)
+        GLES20.glUniform1i(gifTextureUniformHandle, 0)
+
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+
+        GLES20.glDisableVertexAttribArray(gifPositionHandle)
+        GLES20.glDisableVertexAttribArray(gifTexCoordHandle)
+
+        EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+    }
+
+    /**
+     * Builds the shader program used for GIF frames. Reuses the video
+     * program's vertex shader and attribute names; only the fragment shader
+     * differs (sampler2D, and forced opaque output).
+     */
+    private fun createGifProgram(): Boolean {
+        val vertexShader = compileShader(GLES20.GL_VERTEX_SHADER, VERTEX_SHADER_SRC)
+        if (vertexShader == 0) return false
+        val fragmentShader = compileShader(GLES20.GL_FRAGMENT_SHADER, GIF_FRAGMENT_SHADER_SRC)
+        if (fragmentShader == 0) {
+            GLES20.glDeleteShader(vertexShader)
+            return false
+        }
+        val program = GLES20.glCreateProgram()
+        if (program == 0) {
+            GLES20.glDeleteShader(vertexShader)
+            GLES20.glDeleteShader(fragmentShader)
+            return false
+        }
+        GLES20.glAttachShader(program, vertexShader)
+        GLES20.glAttachShader(program, fragmentShader)
+        GLES20.glLinkProgram(program)
+        val linkStatus = IntArray(1)
+        GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linkStatus, 0)
+        GLES20.glDeleteShader(vertexShader)
+        GLES20.glDeleteShader(fragmentShader)
+        if (linkStatus[0] == 0) {
+            Log.e(TAG, "GIF program link failed: ${GLES20.glGetProgramInfoLog(program)}")
+            GLES20.glDeleteProgram(program)
+            return false
+        }
+        val pos = GLES20.glGetAttribLocation(program, "aPosition")
+        val tex = GLES20.glGetAttribLocation(program, "aTexCoord")
+        val uni = GLES20.glGetUniformLocation(program, "uTexture")
+        if (pos < 0 || tex < 0 || uni < 0) {
+            Log.e(TAG, "Failed to get GIF shader attribute/uniform locations")
+            GLES20.glDeleteProgram(program)
+            return false
+        }
+        gifProgram = program
+        gifPositionHandle = pos
+        gifTexCoordHandle = tex
+        gifTextureUniformHandle = uni
+        return true
+    }
+
+    /** Frees the GIF texture and staging bitmap (context must be current). */
+    private fun releaseGifTexture() {
+        if (gifTextureId != 0) {
+            GLES20.glDeleteTextures(1, intArrayOf(gifTextureId), 0)
+            gifTextureId = 0
+        }
+        gifBitmap?.recycle()
+        gifBitmap = null
+        gifTextureWidth = 0
+        gifTextureHeight = 0
+    }
+
     /** Makes this renderer's EGL context/surface current on the calling thread. */
     fun makeCurrent(): Boolean {
         if (eglDisplay == EGL14.EGL_NO_DISPLAY) return false
@@ -478,6 +684,14 @@ class VideoFrameRenderer {
             GLES20.glDeleteTextures(1, intArrayOf(videoTextureId), 0)
             videoTextureId = 0
         }
+        releaseGifTexture()
+        if (gifProgram != 0) {
+            GLES20.glDeleteProgram(gifProgram)
+            gifProgram = 0
+        }
+        gifPositionHandle = -1
+        gifTexCoordHandle = -1
+        gifTextureUniformHandle = -1
         if (shaderProgram != 0) {
             GLES20.glDeleteProgram(shaderProgram)
             shaderProgram = 0
@@ -485,6 +699,7 @@ class VideoFrameRenderer {
         positionHandle = -1
         texCoordHandle = -1
         textureUniformHandle = -1
+        texMatrixHandle = -1
         vertexBuffer = null
         if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
             EGL14.eglMakeCurrent(
@@ -537,6 +752,37 @@ class VideoFrameRenderer {
             void main() {
                 gl_Position = vec4(aPosition, 0.0, 1.0);
                 vTexCoord = aTexCoord;
+            }
+        """
+
+        // Video vertex shader. The quad's texture coordinates are expressed
+        // with v = 0 at the top of the picture (see updateGeometry), but
+        // SurfaceTexture's matrix expects the usual GL convention with v = 0
+        // at the bottom, so v is flipped first and the matrix then applies
+        // the video's rotation, flip and crop. For an upright video the two
+        // flips cancel and the result is identical to using the coordinates
+        // directly, which is what this renderer did before rotation support.
+        private const val VIDEO_VERTEX_SHADER_SRC = """
+            attribute vec2 aPosition;
+            attribute vec2 aTexCoord;
+            uniform mat4 uTexMatrix;
+            varying vec2 vTexCoord;
+            void main() {
+                gl_Position = vec4(aPosition, 0.0, 1.0);
+                vTexCoord = (uTexMatrix * vec4(aTexCoord.x, 1.0 - aTexCoord.y, 0.0, 1.0)).xy;
+            }
+        """
+
+        // GIF frames come from a plain GL_TEXTURE_2D. Output alpha is forced
+        // to 1.0 because GIF transparency is binary and we composite onto
+        // black: transparent pixels were already stored as rgb 0, and a
+        // translucent window surface could otherwise show through.
+        private const val GIF_FRAGMENT_SHADER_SRC = """
+            precision mediump float;
+            varying vec2 vTexCoord;
+            uniform sampler2D uTexture;
+            void main() {
+                gl_FragColor = vec4(texture2D(uTexture, vTexCoord).rgb, 1.0);
             }
         """
 

@@ -10,6 +10,8 @@ import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.SurfaceHolder
 import androidx.preference.PreferenceManager
+import java.io.ByteArrayOutputStream
+import java.io.IOException
 
 /**
  * Renders the user's chosen video as a looping live wallpaper.
@@ -26,6 +28,8 @@ class VideoWallpaperService : WallpaperService() {
 
         private var mediaPlayer: MediaPlayer? = null
         private var prefs: SharedPreferences? = null
+        // @Volatile because the GIF path reads it on the render thread.
+        @Volatile
         private var visible = false
 
         // Counts consecutive prepare attempts that ended in a "transient"
@@ -43,6 +47,13 @@ class VideoWallpaperService : WallpaperService() {
         // isPlaying()==false and both call start(), producing error -38.
         private var weBelieveStarted = false
 
+        // The playback speed we last pushed to the current MediaPlayer. A new
+        // player always starts at 1.0, so this resets whenever the player is
+        // released. Tracking it (rather than skipping the call whenever the
+        // requested speed is 1.0) is what lets the slider return to normal
+        // speed after being moved, without touching playbackParams needlessly.
+        private var appliedSpeed = 1.0f
+
         // Kept so the pref listener can trigger a re-prepare with the
         // correct surface without waiting for the next onSurfaceCreated.
         private var currentHolder: SurfaceHolder? = null
@@ -58,6 +69,16 @@ class VideoWallpaperService : WallpaperService() {
         // onSurfaceCreated, quit in onSurfaceDestroyed.
         private var renderThread: HandlerThread? = null
         private var renderHandler: Handler? = null
+
+        // GIF playback (issue #2). gifPlayer is only touched on the render
+        // thread; everything that changes it is posted to renderHandler.
+        // prepareGeneration is bumped by every releasePlayer() so a GIF load
+        // that is still in flight when the selection changes (or the surface
+        // goes away) discards its result instead of starting stale playback.
+        private var gifPlayer: GifPlayer? = null
+
+        @Volatile
+        private var prepareGeneration = 0
 
         // Draws exactly one frame using the current holder/player state.
         // Posted either by VideoFrameRenderer's onFrameAvailableListener
@@ -77,6 +98,12 @@ class VideoWallpaperService : WallpaperService() {
             if (!visible) return@Runnable
             val r = renderer ?: return@Runnable
             val holder = currentHolder ?: return@Runnable
+            if (gifPlayer != null) {
+                // GIF active: redraw the last uploaded frame (resize, becoming
+                // visible, Fill/Fit change). New frames are driven by GifPlayer.
+                r.drawGifFrame(holder.surfaceFrame.width(), holder.surfaceFrame.height())
+                return@Runnable
+            }
             val player = mediaPlayer
             r.drawFrame(
                 holder.surfaceFrame.width(),
@@ -135,6 +162,9 @@ class VideoWallpaperService : WallpaperService() {
                 startDrawLoopIfVisible()
             } else {
                 stopDrawLoop()
+            }
+            renderHandler?.post {
+                if (isVisible) gifPlayer?.start() else gifPlayer?.pause()
             }
             val player = mediaPlayer ?: return
             // Route through applySpeed rather than calling start()/pause()
@@ -208,6 +238,7 @@ class VideoWallpaperService : WallpaperService() {
                     val speed = sharedPreferences?.getFloat(PREF_PLAYBACK_SPEED, DEFAULT_SPEED)
                         ?: DEFAULT_SPEED
                     mediaPlayer?.let { applySpeed(it, speed) }
+                    renderHandler?.post { gifPlayer?.setSpeed(speed) }
                 }
                 PREF_SCALING_MODE -> {
                     // Unlike video URI, scaling mode doesn't need a full
@@ -216,7 +247,11 @@ class VideoWallpaperService : WallpaperService() {
                     // just update the renderer's mode on its own thread.
                     val handler = renderHandler
                     if (handler != null) {
-                        handler.post { applyScalingModePref() }
+                        handler.post {
+                            applyScalingModePref()
+                            // A paused or single-frame GIF won't redraw on its own.
+                            if (gifPlayer != null) drawFrameRunnable.run()
+                        }
                     }
                 }
                 PREF_VIDEO_URI -> {
@@ -253,6 +288,11 @@ class VideoWallpaperService : WallpaperService() {
             if (!stillGranted) {
                 Log.w(TAG, "Lost read permission for stored video URI — clearing selection")
                 prefs?.edit()?.remove(PREF_VIDEO_URI)?.apply()
+                return
+            }
+
+            if (looksLikeGif(uri)) {
+                prepareGif(uri, speed)
                 return
             }
 
@@ -326,6 +366,106 @@ class VideoWallpaperService : WallpaperService() {
         }
 
         /**
+         * True if the first bytes of [uri]'s content are a GIF signature.
+         * Sniffing the content (rather than trusting a MIME type) means files
+         * with a wrong or missing type still work. Any failure to read
+         * counts as "not a GIF" so the normal video path handles the error.
+         */
+        private fun looksLikeGif(uri: Uri): Boolean {
+            return try {
+                applicationContext.contentResolver.openInputStream(uri)?.use { input ->
+                    val header = ByteArray(6)
+                    var read = 0
+                    while (read < header.size) {
+                        val n = input.read(header, read, header.size - read)
+                        if (n < 0) break
+                        read += n
+                    }
+                    read == header.size && GifDecoder.hasGifSignature(header)
+                } ?: false
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not sniff selected file type", e)
+                false
+            }
+        }
+
+        /**
+         * Loads and starts a GIF wallpaper. File reading and parsing happen
+         * on the render thread (GIFs can be several MB), and playback is
+         * driven entirely from there. Needs the renderer; without one (GL
+         * setup failed) GIFs are unsupported and nothing plays.
+         */
+        private fun prepareGif(uri: Uri, speed: Float) {
+            val handler = renderHandler
+            if (handler == null || renderer == null) {
+                Log.w(TAG, "Renderer not ready — cannot play GIF")
+                return
+            }
+            val generation = prepareGeneration
+            handler.post {
+                if (generation != prepareGeneration) return@post
+                val gif = try {
+                    GifDecoder.parse(readGifBytes(uri))
+                } catch (e: GifFormatException) {
+                    // The file itself is unusable — same treatment as a bad video source.
+                    Log.e(TAG, "Selected GIF could not be decoded — clearing selection", e)
+                    prefs?.edit()?.remove(PREF_VIDEO_URI)?.apply()
+                    return@post
+                } catch (e: IOException) {
+                    Log.e(TAG, "Could not read selected GIF — keeping selection", e)
+                    return@post
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "No permission to read selected GIF — keeping selection", e)
+                    return@post
+                } catch (e: OutOfMemoryError) {
+                    Log.e(TAG, "Out of memory loading selected GIF — keeping selection", e)
+                    return@post
+                }
+                if (generation != prepareGeneration) return@post
+
+                val player = GifPlayer(handler, gif) { drawGifFrameNow(it) }
+                player.setSpeed(speed)
+                gifPlayer = player
+                if (visible) player.start()
+            }
+        }
+
+        /** Reads the whole GIF into memory, refusing files over [MAX_GIF_BYTES]. */
+        private fun readGifBytes(uri: Uri): ByteArray {
+            val input = applicationContext.contentResolver.openInputStream(uri)
+                ?: throw IOException("Could not open $uri")
+            input.use {
+                val out = ByteArrayOutputStream()
+                val buffer = ByteArray(64 * 1024)
+                var total = 0
+                while (true) {
+                    val n = it.read(buffer)
+                    if (n < 0) break
+                    total += n
+                    if (total > MAX_GIF_BYTES) throw GifFormatException("GIF file is too large")
+                    out.write(buffer, 0, n)
+                }
+                return out.toByteArray()
+            }
+        }
+
+        /**
+         * Called by GifPlayer on the render thread for every new frame:
+         * uploads it to the GL texture and, if we're visible, draws it.
+         * Returns false to stop playback (renderer or surface is gone, or
+         * the upload failed).
+         */
+        private fun drawGifFrameNow(gif: GifDecoder): Boolean {
+            val r = renderer ?: return false
+            val holder = currentHolder ?: return false
+            if (!r.uploadGifFrame(gif.pixels, gif.width, gif.height)) return false
+            if (visible) {
+                r.drawGifFrame(holder.surfaceFrame.width(), holder.surfaceFrame.height())
+            }
+            return true
+        }
+
+        /**
          * Single guarded entry point for all player state transitions
          * (start/pause) and speed changes. Called from onPreparedListener,
          * onVisibilityChanged, and onSharedPreferenceChanged (speed changes)
@@ -343,8 +483,9 @@ class VideoWallpaperService : WallpaperService() {
                         player.start()
                         weBelieveStarted = true
                     }
-                    if (speed != 1.0f) {
+                    if (speed != appliedSpeed) {
                         player.playbackParams = PlaybackParams().setSpeed(speed)
+                        appliedSpeed = speed
                     }
                 } else {
                     // PlaybackParams can only be set on a running player on some
@@ -354,6 +495,7 @@ class VideoWallpaperService : WallpaperService() {
                         player.start()
                         weBelieveStarted = true
                         player.playbackParams = PlaybackParams().setSpeed(speed)
+                        appliedSpeed = speed
                     }
                     if (weBelieveStarted) {
                         player.pause()
@@ -410,6 +552,19 @@ class VideoWallpaperService : WallpaperService() {
         }
 
         private fun releasePlayer() {
+            // Invalidate any GIF load still in flight, and stop/discard the
+            // active GIF player on the render thread that owns it. If there
+            // is no render thread any more, nothing else can be using it.
+            prepareGeneration++
+            val gifHandler = renderHandler
+            if (gifHandler != null) {
+                gifHandler.post {
+                    gifPlayer?.release()
+                    gifPlayer = null
+                }
+            } else {
+                gifPlayer = null
+            }
             mediaPlayer?.let {
                 try {
                     if (it.isPlaying) it.stop()
@@ -420,12 +575,16 @@ class VideoWallpaperService : WallpaperService() {
             }
             mediaPlayer = null
             weBelieveStarted = false
+            appliedSpeed = 1.0f
         }
     }
 
     companion object {
         private const val TAG = "VideoWallpaperService"
         private const val MAX_CONSECUTIVE_ERROR_RETRIES = 3
+
+        /** Largest GIF file we will load into memory. */
+        private const val MAX_GIF_BYTES = 50 * 1024 * 1024
         const val PREF_VIDEO_URI = "selected_video_uri"
         const val PREF_PLAYBACK_SPEED = "playback_speed"
         const val PREF_SCALING_MODE = "scaling_mode"
