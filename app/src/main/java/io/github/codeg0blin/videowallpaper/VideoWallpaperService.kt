@@ -13,7 +13,7 @@ import androidx.preference.PreferenceManager
 import java.io.IOException
 
 /**
- * Renders the user's chosen video as a looping live wallpaper.
+ * Renders the user's chosen video once as a live wallpaper, then holds its final frame.
  *
  * Android creates a new Engine instance per surface that needs the wallpaper
  * (home screen, lock screen, or both — depending on OEM/launcher behavior),
