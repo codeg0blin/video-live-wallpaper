@@ -198,6 +198,19 @@
 
     </com.google.android.material.button.MaterialButtonToggleGroup>
 
+    <CheckBox
+        android:id="@+id/playOnUnlockCheckBox"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:buttonTint="@color/accent"
+        android:text="@string/play_on_unlock"
+        android:textColor="@color/text_primary"
+        android:textSize="12sp"
+        app:layout_constraintTop_toBottomOf="@id/cropToggleGroup"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <Button
         android:id="@+id/setWallpaperButton"
         android:layout_width="0dp"
@@ -214,6 +227,6 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/cropToggleGroup" />
+        app:layout_constraintTop_toBottomOf="@id/playOnUnlockCheckBox" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
