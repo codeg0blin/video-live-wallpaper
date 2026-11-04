@@ -83,6 +83,11 @@ class MainActivity : AppCompatActivity() {
 
         setupSpeedControl()
         setupCropControl()
+        binding.playOnUnlockCheckBox.isChecked =
+            prefs.getBoolean(VideoWallpaperService.PREF_PLAY_ON_UNLOCK, false)
+        binding.playOnUnlockCheckBox.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(VideoWallpaperService.PREF_PLAY_ON_UNLOCK, checked).apply()
+        }
         restoreSelection()
 
         binding.pickButton.setOnClickListener {
