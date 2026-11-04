@@ -53,6 +53,13 @@ class VideoWallpaperService : WallpaperService() {
         // speed after being moved, without touching playbackParams needlessly.
         private var appliedSpeed = 1.0f
 
+        // Keep the last known dimensions after MediaPlayer is released at EOS.
+        // The renderer still owns the SurfaceTexture containing the final frame.
+        private var cachedVideoWidth = 0
+        private var cachedVideoHeight = 0
+        private var playbackCompleted = false
+        private var restartVideoOnNextVisible = false
+
         // Kept so the pref listener can trigger a re-prepare with the
         // correct surface without waiting for the next onSurfaceCreated.
         private var currentHolder: SurfaceHolder? = null
@@ -107,8 +114,10 @@ class VideoWallpaperService : WallpaperService() {
             r.drawFrame(
                 holder.surfaceFrame.width(),
                 holder.surfaceFrame.height(),
-                player?.let { if (weBelieveStarted || it.isPlaying) it.videoWidth else 0 } ?: 0,
-                player?.let { if (weBelieveStarted || it.isPlaying) it.videoHeight else 0 } ?: 0
+                player?.let { if (weBelieveStarted || it.isPlaying) it.videoWidth else cachedVideoWidth }
+                    ?: cachedVideoWidth,
+                player?.let { if (weBelieveStarted || it.isPlaying) it.videoHeight else cachedVideoHeight }
+                    ?: cachedVideoHeight
             )
         }
 
@@ -156,25 +165,33 @@ class VideoWallpaperService : WallpaperService() {
         }
 
         override fun onVisibilityChanged(isVisible: Boolean) {
+            val wasVisible = visible
             visible = isVisible
             if (isVisible) {
                 startDrawLoopIfVisible()
             } else {
+                // A video that was interrupted by a lock/screen transition starts
+                // from the beginning on the next visible transition. GIF behavior
+                // remains unchanged.
+                if (mediaPlayer != null || playbackCompleted) {
+                    restartVideoOnNextVisible = true
+                }
                 stopDrawLoop()
             }
+
             renderHandler?.post {
                 if (isVisible) gifPlayer?.start() else gifPlayer?.pause()
             }
+
+            if (isVisible && !wasVisible && restartVideoOnNextVisible) {
+                restartVideoOnNextVisible = false
+                currentHolder?.let { preparePlayer(it) }
+                return
+            }
+
             val player = mediaPlayer ?: return
             // Route through applySpeed rather than calling start()/pause()
-            // directly here. Having two independent call sites (this one and
-            // the one inside preparePlayer's onPreparedListener) both touching
-            // start()/pause() on the same MediaPlayer was racy — if a visibility
-            // change and a prepare-completion landed close together, they could
-            // stack an extra start() on top of one that was still resolving,
-            // which some OEM MediaPlayer implementations (observed on
-            // Adreno/TCL) turn into error -38. Funneling everything through
-            // applySpeed keeps state transitions to one guarded path.
+            // directly here to avoid duplicate state transitions on OEM players.
             val speed = prefs?.getFloat(PREF_PLAYBACK_SPEED, DEFAULT_SPEED) ?: DEFAULT_SPEED
             applySpeed(player, speed)
         }
@@ -316,12 +333,48 @@ class VideoWallpaperService : WallpaperService() {
                     Log.w(TAG, "Renderer not ready — falling back to raw surface (no crop/fit)")
                     player.setSurface(holder.surface)
                 }
-                player.isLooping = true
+                // A selected video is a one-shot wallpaper: decode it once,
+                // then leave its final frame in the renderer's SurfaceTexture.
+                player.isLooping = false
                 player.setVolume(0f, 0f) // wallpapers should be silent
                 player.setOnPreparedListener {
                     consecutiveErrorRetries = 0
+                    cachedVideoWidth = it.videoWidth
+                    cachedVideoHeight = it.videoHeight
                     applySpeed(it, speed)
                     startDrawLoopIfVisible()
+                }
+                player.setOnCompletionListener { completed ->
+                    // Ignore callbacks from a player that has already been
+                    // replaced (for example, after a source preference change).
+                    if (mediaPlayer !== completed) return@setOnCompletionListener
+
+                    playbackCompleted = true
+                    weBelieveStarted = false
+                    if (completed.videoWidth > 0) cachedVideoWidth = completed.videoWidth
+                    if (completed.videoHeight > 0) cachedVideoHeight = completed.videoHeight
+
+                    // Consume and draw any queued final frame on the EGL thread
+                    // before releasing the decoder. Do not release the renderer:
+                    // its external texture is what keeps the last frame visible.
+                    val handler = renderHandler
+                    if (handler != null) {
+                        handler.post {
+                            if (mediaPlayer !== completed) return@post
+                            drawFrameRunnable.run()
+                            android.os.Handler(mainLooper).post {
+                                if (mediaPlayer === completed && playbackCompleted) {
+                                    completed.release()
+                                    mediaPlayer = null
+                                    appliedSpeed = 1.0f
+                                }
+                            }
+                        }
+                    } else {
+                        completed.release()
+                        if (mediaPlayer === completed) mediaPlayer = null
+                        appliedSpeed = 1.0f
+                    }
                 }
                 player.setOnErrorListener { _, what, extra ->
                     Log.e(TAG, "MediaPlayer error: what=$what extra=$extra")
@@ -532,6 +585,10 @@ class VideoWallpaperService : WallpaperService() {
             mediaPlayer = null
             weBelieveStarted = false
             appliedSpeed = 1.0f
+            cachedVideoWidth = 0
+            cachedVideoHeight = 0
+            playbackCompleted = false
+            restartVideoOnNextVisible = false
         }
     }
 
