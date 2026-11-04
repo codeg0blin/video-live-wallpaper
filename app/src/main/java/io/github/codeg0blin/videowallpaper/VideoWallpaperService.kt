@@ -1,5 +1,9 @@
 package io.github.codeg0blin.videowallpaper
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.media.MediaPlayer
 import android.media.PlaybackParams
@@ -9,11 +13,12 @@ import android.os.HandlerThread
 import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.SurfaceHolder
+import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import java.io.IOException
 
 /**
- * Renders the user's chosen video as a looping live wallpaper.
+ * Renders the user's chosen video once as a live wallpaper, then holds its final frame.
  *
  * Android creates a new Engine instance per surface that needs the wallpaper
  * (home screen, lock screen, or both — depending on OEM/launcher behavior),
@@ -52,6 +57,43 @@ class VideoWallpaperService : WallpaperService() {
         // requested speed is 1.0) is what lets the slider return to normal
         // speed after being moved, without touching playbackParams needlessly.
         private var appliedSpeed = 1.0f
+
+        // Keep the last known dimensions after MediaPlayer is released at EOS.
+        // The renderer still owns the SurfaceTexture containing the final frame.
+        private var cachedVideoWidth = 0
+        private var cachedVideoHeight = 0
+        private var playbackCompleted = false
+        @Volatile private var captureFirstFrame = false
+        @Volatile private var pauseAfterNextFrame = false
+        private var firstFrameReady = false
+        private var unlockPlaybackPending = false
+        private var screenWasOff = false
+        private var unlockReceiverRegistered = false
+
+        private val screenStateReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                when (intent.action) {
+                    Intent.ACTION_SCREEN_OFF -> {
+                        screenWasOff = true
+                        if (playOnUnlockEnabled() && !selectedSourceIsGif()) {
+                            captureFirstFrame = true
+                            firstFrameReady = false
+                            unlockPlaybackPending = false
+                            currentHolder?.let { preparePlayer(it) }
+                        }
+                    }
+                    Intent.ACTION_USER_PRESENT -> {
+                        if (screenWasOff && playOnUnlockEnabled() && !selectedSourceIsGif()) {
+                            screenWasOff = false
+                            captureFirstFrame = false
+                            firstFrameReady = false
+                            unlockPlaybackPending = true
+                            currentHolder?.let { preparePlayer(it) }
+                        }
+                    }
+                }
+            }
+        }
 
         // Kept so the pref listener can trigger a re-prepare with the
         // correct surface without waiting for the next onSurfaceCreated.
@@ -94,7 +136,7 @@ class VideoWallpaperService : WallpaperService() {
         // frame arrival means we draw only as often as the video itself
         // produces new frames.
         private val drawFrameRunnable = Runnable {
-            if (!visible) return@Runnable
+            if (!visible && !pauseAfterNextFrame) return@Runnable
             val r = renderer ?: return@Runnable
             val holder = currentHolder ?: return@Runnable
             if (gifPlayer != null) {
@@ -107,15 +149,44 @@ class VideoWallpaperService : WallpaperService() {
             r.drawFrame(
                 holder.surfaceFrame.width(),
                 holder.surfaceFrame.height(),
-                player?.let { if (weBelieveStarted || it.isPlaying) it.videoWidth else 0 } ?: 0,
-                player?.let { if (weBelieveStarted || it.isPlaying) it.videoHeight else 0 } ?: 0
+                player?.let { if (weBelieveStarted || it.isPlaying) it.videoWidth else cachedVideoWidth }
+                    ?: cachedVideoWidth,
+                player?.let { if (weBelieveStarted || it.isPlaying) it.videoHeight else cachedVideoHeight }
+                    ?: cachedVideoHeight
             )
+            if (pauseAfterNextFrame) {
+                pauseAfterNextFrame = false
+                android.os.Handler(mainLooper).post {
+                    val current = mediaPlayer
+                    if (current != null && !playbackCompleted) {
+                        try {
+                            current.pause()
+                            weBelieveStarted = false
+                            firstFrameReady = true
+                        } catch (e: IllegalStateException) {
+                            Log.w(TAG, "Could not pause after capturing the first frame", e)
+                        }
+                    }
+                }
+            }
         }
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
             prefs = PreferenceManager.getDefaultSharedPreferences(this@VideoWallpaperService)
             prefs?.registerOnSharedPreferenceChangeListener(this)
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_USER_PRESENT)
+            }
+            ContextCompat.registerReceiver(
+                this@VideoWallpaperService, screenStateReceiver, filter,
+                ContextCompat.RECEIVER_EXPORTED
+            )
+            unlockReceiverRegistered = true
+            captureFirstFrame = playOnUnlockEnabled()
+            screenWasOff = (getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager)
+                ?.isKeyguardLocked == true
         }
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
@@ -157,26 +228,18 @@ class VideoWallpaperService : WallpaperService() {
 
         override fun onVisibilityChanged(isVisible: Boolean) {
             visible = isVisible
-            if (isVisible) {
-                startDrawLoopIfVisible()
-            } else {
-                stopDrawLoop()
-            }
+            if (isVisible) startDrawLoopIfVisible() else stopDrawLoop()
             renderHandler?.post {
                 if (isVisible) gifPlayer?.start() else gifPlayer?.pause()
             }
             val player = mediaPlayer ?: return
-            // Route through applySpeed rather than calling start()/pause()
-            // directly here. Having two independent call sites (this one and
-            // the one inside preparePlayer's onPreparedListener) both touching
-            // start()/pause() on the same MediaPlayer was racy — if a visibility
-            // change and a prepare-completion landed close together, they could
-            // stack an extra start() on top of one that was still resolving,
-            // which some OEM MediaPlayer implementations (observed on
-            // Adreno/TCL) turn into error -38. Funneling everything through
-            // applySpeed keeps state transitions to one guarded path.
+            if (captureFirstFrame || firstFrameReady || playbackCompleted) return
             val speed = prefs?.getFloat(PREF_PLAYBACK_SPEED, DEFAULT_SPEED) ?: DEFAULT_SPEED
-            applySpeed(player, speed)
+            if (isVisible && unlockPlaybackPending) {
+                applySpeed(player, speed)
+            } else if (!unlockPlaybackPending) {
+                applySpeed(player, speed)
+            }
         }
 
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
@@ -199,6 +262,12 @@ class VideoWallpaperService : WallpaperService() {
         override fun onDestroy() {
             super.onDestroy()
             prefs?.unregisterOnSharedPreferenceChangeListener(this)
+            if (unlockReceiverRegistered) {
+                try { unregisterReceiver(screenStateReceiver) } catch (e: IllegalArgumentException) {
+                    Log.w(TAG, "Unlock receiver was already unregistered", e)
+                }
+                unlockReceiverRegistered = false
+            }
             releasePlayer()
             releaseRenderer()
         }
@@ -316,12 +385,59 @@ class VideoWallpaperService : WallpaperService() {
                     Log.w(TAG, "Renderer not ready — falling back to raw surface (no crop/fit)")
                     player.setSurface(holder.surface)
                 }
-                player.isLooping = true
+                // A selected video is a one-shot wallpaper: decode it once,
+                // then leave its final frame in the renderer's SurfaceTexture.
+                player.isLooping = false
                 player.setVolume(0f, 0f) // wallpapers should be silent
                 player.setOnPreparedListener {
                     consecutiveErrorRetries = 0
-                    applySpeed(it, speed)
+                    cachedVideoWidth = it.videoWidth
+                    cachedVideoHeight = it.videoHeight
+                    if (captureFirstFrame) {
+                        pauseAfterNextFrame = true
+                        try {
+                            it.start()
+                            weBelieveStarted = true
+                        } catch (e: IllegalStateException) {
+                            Log.e(TAG, "Could not capture the video's first frame", e)
+                        }
+                    } else if (visible) {
+                        applySpeed(it, speed)
+                        unlockPlaybackPending = false
+                    }
                     startDrawLoopIfVisible()
+                }
+                player.setOnCompletionListener { completed ->
+                    // Ignore callbacks from a player that has already been
+                    // replaced (for example, after a source preference change).
+                    if (mediaPlayer !== completed) return@setOnCompletionListener
+
+                    playbackCompleted = true
+                    weBelieveStarted = false
+                    if (completed.videoWidth > 0) cachedVideoWidth = completed.videoWidth
+                    if (completed.videoHeight > 0) cachedVideoHeight = completed.videoHeight
+
+                    // Consume and draw any queued final frame on the EGL thread
+                    // before releasing the decoder. Do not release the renderer:
+                    // its external texture is what keeps the last frame visible.
+                    val handler = renderHandler
+                    if (handler != null) {
+                        handler.post {
+                            if (mediaPlayer !== completed) return@post
+                            drawFrameRunnable.run()
+                            android.os.Handler(mainLooper).post {
+                                if (mediaPlayer === completed && playbackCompleted) {
+                                    completed.release()
+                                    mediaPlayer = null
+                                    appliedSpeed = 1.0f
+                                }
+                            }
+                        }
+                    } else {
+                        completed.release()
+                        if (mediaPlayer === completed) mediaPlayer = null
+                        appliedSpeed = 1.0f
+                    }
                 }
                 player.setOnErrorListener { _, what, extra ->
                     Log.e(TAG, "MediaPlayer error: what=$what extra=$extra")
@@ -439,6 +555,7 @@ class VideoWallpaperService : WallpaperService() {
                         player.start()
                         weBelieveStarted = true
                     }
+                    unlockPlaybackPending = false
                     if (speed != appliedSpeed) {
                         player.playbackParams = PlaybackParams().setSpeed(speed)
                         appliedSpeed = speed
@@ -532,6 +649,17 @@ class VideoWallpaperService : WallpaperService() {
             mediaPlayer = null
             weBelieveStarted = false
             appliedSpeed = 1.0f
+            cachedVideoWidth = 0
+            cachedVideoHeight = 0
+            playbackCompleted = false
+        }
+        private fun playOnUnlockEnabled(): Boolean =
+            prefs?.getBoolean(PREF_PLAY_ON_UNLOCK, false) ?: false
+
+        private fun selectedSourceIsGif(): Boolean {
+            val value = prefs?.getString(PREF_VIDEO_URI, null) ?: return false
+            return try { GifFiles.looksLikeGif(contentResolver, Uri.parse(value)) }
+            catch (e: Exception) { false }
         }
     }
 
@@ -541,6 +669,7 @@ class VideoWallpaperService : WallpaperService() {
         const val PREF_VIDEO_URI = "selected_video_uri"
         const val PREF_PLAYBACK_SPEED = "playback_speed"
         const val PREF_SCALING_MODE = "scaling_mode"
+        const val PREF_PLAY_ON_UNLOCK = "play_animation_on_unlock"
         const val DEFAULT_SPEED = 1.0f
         const val DEFAULT_SCALING_MODE = MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
     }
