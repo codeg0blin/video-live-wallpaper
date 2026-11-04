@@ -649,6 +649,7 @@ class VideoWallpaperService : WallpaperService() {
             mediaPlayer = null
             weBelieveStarted = false
             appliedSpeed = 1.0f
+            pauseAfterNextFrame = false
             cachedVideoWidth = 0
             cachedVideoHeight = 0
             playbackCompleted = false
