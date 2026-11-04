@@ -65,6 +65,7 @@ class VideoWallpaperService : WallpaperService() {
         private var playbackCompleted = false
         @Volatile private var captureFirstFrame = false
         @Volatile private var pauseAfterNextFrame = false
+        @Volatile private var frameArrivalPending = false
         private var firstFrameReady = false
         private var unlockPlaybackPending = false
         private var screenWasOff = false
@@ -154,7 +155,9 @@ class VideoWallpaperService : WallpaperService() {
                 player?.let { if (weBelieveStarted || it.isPlaying) it.videoHeight else cachedVideoHeight }
                     ?: cachedVideoHeight
             )
-            if (pauseAfterNextFrame) {
+            val receivedNewFrame = frameArrivalPending
+            frameArrivalPending = false
+            if (pauseAfterNextFrame && receivedNewFrame) {
                 pauseAfterNextFrame = false
                 android.os.Handler(mainLooper).post {
                     val current = mediaPlayer
@@ -209,6 +212,7 @@ class VideoWallpaperService : WallpaperService() {
                     // docs), so hop back onto our own render thread via
                     // renderHandler before touching the renderer/GL state.
                     r.onFrameAvailableListener = {
+                        frameArrivalPending = true
                         renderHandler?.post(drawFrameRunnable)
                     }
                 } else {
@@ -650,6 +654,7 @@ class VideoWallpaperService : WallpaperService() {
             weBelieveStarted = false
             appliedSpeed = 1.0f
             pauseAfterNextFrame = false
+            frameArrivalPending = false
             cachedVideoWidth = 0
             cachedVideoHeight = 0
             playbackCompleted = false
