@@ -19,6 +19,15 @@ A lightweight Android app that turns a video or animated GIF from your device in
 - One-tap wallpaper setting through Android's own live wallpaper picker
 - No ads, no analytics, no network access of any kind
 
+## What's New in v1.4.0
+
+- Play on Unlock: Optional one-shot video animation each time the phone is unlocked.
+- Loop Control: Video looping is now disabled by default. Enable it anytime using the loop checkbox.
+- One-Shot Playback: When looping is disabled, the video plays once and holds its final frame.
+- First Frame Preview: Displays the video's first frame while the phone is locked when unlock animation is enabled.
+- Playback Improvements: Improved playback lifecycle and frame transitions.
+- Fill Scaling: Removed the crop-mode selector. Wallpapers now automatically fill the display edge to edge.
+
 ## Install
 
 - **F-Droid:** [Video Live Wallpaper on F-Droid](https://f-droid.org/packages/io.github.codeg0blin.videowallpaper/)
