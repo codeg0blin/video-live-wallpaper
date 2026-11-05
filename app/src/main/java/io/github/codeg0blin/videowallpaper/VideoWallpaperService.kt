@@ -312,19 +312,19 @@ class VideoWallpaperService : WallpaperService() {
                     mediaPlayer?.let { applySpeed(it, speed) }
                     renderHandler?.post { gifPlayer?.setSpeed(speed) }
                 }
-                PREF_SCALING_MODE -> {
-                    // Unlike video URI, scaling mode doesn't need a full
-                    // MediaPlayer re-prepare now that it's handled by the
-                    // renderer's geometry rather than MediaPlayer itself —
-                    // just update the renderer's mode on its own thread.
-                    val handler = renderHandler
-                    if (handler != null) {
-                        handler.post {
-                            applyScalingModePref()
-                            // A paused or single-frame GIF won't redraw on its own.
-                            if (gifPlayer != null) drawFrameRunnable.run()
-                        }
+                PREF_LOOP_VIDEO -> {
+                    val shouldLoop = sharedPreferences?.getBoolean(PREF_LOOP_VIDEO, DEFAULT_LOOP_VIDEO)
+                        ?: DEFAULT_LOOP_VIDEO
+                    try {
+                        mediaPlayer?.isLooping = shouldLoop
+                    } catch (e: IllegalStateException) {
+                        Log.w(TAG, "Could not update video loop mode", e)
                     }
+                }
+                PREF_SCALING_MODE -> {
+                    // Kept for compatibility with older saved preferences.
+                    // The renderer is now always configured to Fill.
+                    renderHandler?.post { applyScalingModePref() }
                 }
                 PREF_VIDEO_URI -> {
                     preparePlayer(holder)
@@ -391,7 +391,7 @@ class VideoWallpaperService : WallpaperService() {
                 }
                 // A selected video is a one-shot wallpaper: decode it once,
                 // then leave its final frame in the renderer's SurfaceTexture.
-                player.isLooping = false
+                player.isLooping = prefs?.getBoolean(PREF_LOOP_VIDEO, DEFAULT_LOOP_VIDEO) ?: DEFAULT_LOOP_VIDEO
                 player.setVolume(0f, 0f) // wallpapers should be silent
                 player.setOnPreparedListener {
                     consecutiveErrorRetries = 0
@@ -592,17 +592,8 @@ class VideoWallpaperService : WallpaperService() {
          * the renderer exists.
          */
         private fun applyScalingModePref() {
-            val r = renderer ?: return
-            val modeInt = prefs?.getInt(PREF_SCALING_MODE, DEFAULT_SCALING_MODE) ?: DEFAULT_SCALING_MODE
-            val mode = if (modeInt == MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT) {
-                VideoFrameRenderer.ScalingMode.FIT
-            } else {
-                // Default/VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING and
-                // any unrecognized value both fall back to FILL, matching
-                // DEFAULT_SCALING_MODE's existing crop-based default below.
-                VideoFrameRenderer.ScalingMode.FILL
-            }
-            r.setScalingMode(mode)
+            // Fill is intentional: wallpaper always covers the full display.
+            renderer?.setScalingMode(VideoFrameRenderer.ScalingMode.FILL)
         }
 
         /**
@@ -674,9 +665,11 @@ class VideoWallpaperService : WallpaperService() {
         private const val MAX_CONSECUTIVE_ERROR_RETRIES = 3
         const val PREF_VIDEO_URI = "selected_video_uri"
         const val PREF_PLAYBACK_SPEED = "playback_speed"
-        const val PREF_SCALING_MODE = "scaling_mode"
+        const val PREF_SCALING_MODE = "scaling_mode" // retained for older installations
         const val PREF_PLAY_ON_UNLOCK = "play_animation_on_unlock"
+        const val PREF_LOOP_VIDEO = "loop_video"
         const val DEFAULT_SPEED = 1.0f
+        const val DEFAULT_LOOP_VIDEO = true
         const val DEFAULT_SCALING_MODE = MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
     }
 }
