@@ -1,6 +1,6 @@
 Video Live Wallpaper 1.4.0
 
-- Added a Loop video playback checkbox. Videos can now loop continuously or play once and hold the final frame.
+- Video looping is now disabled by default. Enable Loop video playback to repeat videos continuously; otherwise, videos play once and hold the final frame.
 - Added optional video playback on phone unlock.
-- Removed the crop-mode selector; video and GIF wallpapers now always use Fill scaling to cover the screen edge to edge.
+- Removed the crop-mode selector; video and GIF wallpapers always use Fill scaling to cover the screen edge to edge.
 - Enabled R8 code shrinking and resource shrinking for release builds.
