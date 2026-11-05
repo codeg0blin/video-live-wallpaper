@@ -1,15 +1,23 @@
-name: Android build
+name: Android build and release
 
 on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag to publish (for example v1.4.0)"
+        required: true
+        default: "v1.4.0"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -27,14 +35,26 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run unit tests and assemble debug APK
+      - name: Run tests, lint and build APKs
         run: |
           chmod +x ./gradlew
-          ./gradlew test assembleDebug
+          ./gradlew test lint assembleDebug assembleRelease
 
-      - name: Upload debug APK
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Video-Live-Wallpaper-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: Video-Live-Wallpaper-v1.4.0-APKs
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+          target_commitish: main
+          name: Video Live Wallpaper ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+          generate_release_notes: true
+          files: app/build/outputs/apk/release/*.apk
