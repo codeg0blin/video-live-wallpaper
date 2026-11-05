@@ -317,6 +317,13 @@ class VideoWallpaperService : WallpaperService() {
                         ?: DEFAULT_LOOP_VIDEO
                     try {
                         mediaPlayer?.isLooping = shouldLoop
+                        // If one-shot playback already reached EOS, enabling
+                        // looping should take effect immediately by preparing
+                        // a fresh player. The retained renderer texture is
+                        // replaced by the first frame as soon as it arrives.
+                        if (shouldLoop && mediaPlayer == null && playbackCompleted) {
+                            currentHolder?.let { preparePlayer(it) }
+                        }
                     } catch (e: IllegalStateException) {
                         Log.w(TAG, "Could not update video loop mode", e)
                     }
