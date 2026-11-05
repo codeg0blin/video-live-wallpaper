@@ -24,7 +24,6 @@ import io.github.codeg0blin.videowallpaper.R
 import io.github.codeg0blin.videowallpaper.VideoWallpaperService
 import io.github.codeg0blin.videowallpaper.databinding.ActivityMainBinding
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -49,7 +48,6 @@ class MainActivity : AppCompatActivity() {
     // slider moves without needing to re-prepare the whole VideoView.
     private var previewPlayer: MediaPlayer? = null
     private var currentSpeed: Float = VideoWallpaperService.Companion.DEFAULT_SPEED
-    private var currentScalingMode: Int = VideoWallpaperService.Companion.DEFAULT_SCALING_MODE
 
     // Debounce handler — delays writing speed to prefs until 500ms after the
     // user lifts their finger, so rapid slider adjustments don't each trigger
@@ -79,10 +77,23 @@ class MainActivity : AppCompatActivity() {
         }
 
         currentSpeed = prefs.getFloat(VideoWallpaperService.Companion.PREF_PLAYBACK_SPEED, VideoWallpaperService.Companion.DEFAULT_SPEED)
-        currentScalingMode = prefs.getInt(VideoWallpaperService.Companion.PREF_SCALING_MODE, VideoWallpaperService.Companion.DEFAULT_SCALING_MODE)
 
         setupSpeedControl()
-        setupCropControl()
+        binding.loopVideoCheckBox.isChecked =
+            prefs.getBoolean(VideoWallpaperService.PREF_LOOP_VIDEO, VideoWallpaperService.DEFAULT_LOOP_VIDEO)
+        binding.loopVideoCheckBox.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(VideoWallpaperService.PREF_LOOP_VIDEO, checked).apply()
+            try {
+                previewPlayer?.isLooping = checked
+            } catch (e: IllegalStateException) {
+                // Preview may be transitioning between prepared and released states.
+            }
+        }
+        binding.playOnUnlockCheckBox.isChecked =
+            prefs.getBoolean(VideoWallpaperService.PREF_PLAY_ON_UNLOCK, false)
+        binding.playOnUnlockCheckBox.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(VideoWallpaperService.PREF_PLAY_ON_UNLOCK, checked).apply()
+        }
         restoreSelection()
 
         binding.pickButton.setOnClickListener {
@@ -155,35 +166,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- Crop / scaling mode control ------------------------------------
-
-    private fun setupCropControl() {
-        val initialCheckedId = if (currentScalingMode == MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT) {
-            binding.cropFitButton.id
-        } else {
-            binding.cropFillButton.id
-        }
-        binding.cropToggleGroup.check(initialCheckedId)
-
-        binding.cropToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (!isChecked) return@addOnButtonCheckedListener
-            currentScalingMode = if (checkedId == binding.cropFitButton.id) {
-                MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT
-            } else {
-                MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
-            }
-            prefs.edit().putInt(VideoWallpaperService.Companion.PREF_SCALING_MODE, currentScalingMode).apply()
-            applyCropToGifPreview()
-            applyCropToVideoPreview()
-            // Crop mode for VideoView itself is controlled by view scaleType,
-            // which VideoView doesn't expose directly the way MediaPlayer does
-            // for a raw Surface — the preview already fills its card via
-            // layout_gravity=center, so this setting's visual effect is most
-            // apparent once actually set as a wallpaper. We still persist it
-            // here so the wallpaper service picks it up immediately.
-        }
-    }
-
     // --- Video selection -------------------------------------------------
 
     private fun restoreSelection() {
@@ -236,14 +218,9 @@ class MainActivity : AppCompatActivity() {
     // --- Video preview crop ------------------------------------------------
 
     /**
-     * Makes the video preview show the chosen crop mode the way the wallpaper
-     * does. VideoView always fits the whole picture inside its own bounds, so
-     * rather than replacing it, we size the view itself: for Fit it is the
-     * largest size that fits the preview card, for Fill the smallest size
-     * that covers it, and the card (the parent frame) clips whatever sticks
-     * out. The size keeps the video's aspect ratio, so VideoView adds no
-     * letterboxing of its own. Does nothing until the player knows the
-     * video's size and the frame has been laid out.
+     * Size the preview to cover its card while preserving the video's aspect
+     * ratio. The parent frame clips the overflow, matching the wallpaper's
+     * always-on Fill behavior.
      */
     private fun applyCropToVideoPreview() {
         val player = previewPlayer ?: return
@@ -256,11 +233,7 @@ class MainActivity : AppCompatActivity() {
 
         val scaleX = frameW.toFloat() / videoW
         val scaleY = frameH.toFloat() / videoH
-        val scale = if (currentScalingMode == MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT) {
-            min(scaleX, scaleY)
-        } else {
-            max(scaleX, scaleY)
-        }
+        val scale = max(scaleX, scaleY)
         val width = (videoW * scale).roundToInt()
         val height = (videoH * scale).roundToInt()
 
@@ -276,12 +249,7 @@ class MainActivity : AppCompatActivity() {
     // --- GIF preview ------------------------------------------------------
 
     private fun applyCropToGifPreview() {
-        binding.previewGif.scaleType =
-            if (currentScalingMode == MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT) {
-                ImageView.ScaleType.FIT_CENTER
-            } else {
-                ImageView.ScaleType.CENTER_CROP
-            }
+        binding.previewGif.scaleType = ImageView.ScaleType.CENTER_CROP
     }
 
     /**
@@ -350,7 +318,7 @@ class MainActivity : AppCompatActivity() {
         binding.previewVideo.visibility = View.VISIBLE
         binding.previewVideo.setVideoURI(uri)
         binding.previewVideo.setOnPreparedListener { mp ->
-            mp.isLooping = true
+            mp.isLooping = prefs.getBoolean(VideoWallpaperService.PREF_LOOP_VIDEO, VideoWallpaperService.DEFAULT_LOOP_VIDEO)
             mp.setVolume(0f, 0f)
             previewPlayer = mp
             applyCropToVideoPreview()

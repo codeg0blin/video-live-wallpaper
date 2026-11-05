@@ -144,59 +144,31 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/speedLabel" />
 
-    <!-- Crop / scaling mode control -->
-    <TextView
-        android:id="@+id/cropLabel"
+    <CheckBox
+        android:id="@+id/loopVideoCheckBox"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:text="@string/crop_label"
+        android:layout_marginTop="8dp"
+        android:buttonTint="@color/accent"
+        android:text="@string/loop_video"
         android:textColor="@color/text_primary"
         android:textSize="12sp"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/speedSeekBar"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/speedSeekBar" />
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    <com.google.android.material.button.MaterialButtonToggleGroup
-        android:id="@+id/cropToggleGroup"
+    <CheckBox
+        android:id="@+id/playOnUnlockCheckBox"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="2dp"
+        android:buttonTint="@color/accent"
+        android:text="@string/play_on_unlock"
+        android:textColor="@color/text_primary"
+        android:textSize="12sp"
+        app:layout_constraintTop_toBottomOf="@id/loopVideoCheckBox"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/cropLabel"
-        app:selectionRequired="true"
-        app:singleSelection="true">
-
-        <Button
-            android:id="@+id/cropFillButton"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:text="@string/crop_fill"
-            android:textColor="@color/toggle_text"
-            app:backgroundTint="@color/toggle_bg"
-            android:textSize="11sp"
-            app:strokeColor="@color/accent" />
-
-        <Button
-            android:id="@+id/cropFitButton"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_weight="1"
-            android:insetTop="0dp"
-            android:insetBottom="0dp"
-            android:text="@string/crop_fit"
-            android:textColor="@color/toggle_text"
-            app:backgroundTint="@color/toggle_bg"
-            android:textSize="11sp"
-            app:strokeColor="@color/accent" />
-
-    </com.google.android.material.button.MaterialButtonToggleGroup>
+        app:layout_constraintEnd_toEndOf="parent" />
 
     <Button
         android:id="@+id/setWallpaperButton"
@@ -214,6 +186,6 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/cropToggleGroup" />
+        app:layout_constraintTop_toBottomOf="@id/playOnUnlockCheckBox" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

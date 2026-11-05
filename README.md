@@ -1,21 +1,32 @@
 # Video Live Wallpaper
 
-A small Android app that lets you pick any video or animated GIF from your device and set it as a looping live wallpaper.
+A lightweight Android app that turns a video or animated GIF from your device into a live wallpaper.
 
 <p align="center">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" width="260" alt="Main screen: choose a video, playback speed, crop mode">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" width="260" alt="Main screen: choose media, playback speed and playback options">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" width="260" alt="Android's live wallpaper preview screen">
 </p>
 
 ## Features
 
 - Pick a video or animated GIF with the system file picker
-- Preview it looping (muted) before setting it
+- Preview your selected video or GIF before setting it
+- Choose whether videos loop continuously or play once and hold the final frame
+- Optional one-shot video animation each time the phone is unlocked
 - Adjustable playback speed (0.25x–2.0x)
-- Fill (crop to cover the screen) or Fit (show the whole frame, letterboxed if needed) scaling, shown in both the preview and the wallpaper
+- Always-on Fill scaling: the wallpaper covers the display edge to edge
 - Portrait phone videos display the right way up
 - One-tap wallpaper setting through Android's own live wallpaper picker
 - No ads, no analytics, no network access of any kind
+
+## What's New in v1.4.0
+
+- Play on Unlock: Optional one-shot video animation each time the phone is unlocked.
+- Loop Control: Video looping is now disabled by default. Enable it anytime using the loop checkbox.
+- One-Shot Playback: When looping is disabled, the video plays once and holds its final frame.
+- First Frame Preview: Displays the video's first frame while the phone is locked when unlock animation is enabled.
+- Playback Improvements: Improved playback lifecycle and frame transitions.
+- Fill Scaling: Removed the crop-mode selector. Wallpapers now automatically fill the display edge to edge.
 
 ## Install
 
@@ -26,9 +37,9 @@ Requires Android 8.0 (API 26) or newer.
 
 ## How it works
 
-The app implements an Android `WallpaperService` that loops your chosen video using `MediaPlayer`. Since version 1.2.0, decoded frames go to a `SurfaceTexture` and are drawn with a small OpenGL ES 2.0 renderer (`VideoFrameRenderer.kt`), which applies the video's own rotation so portrait phone clips come out upright. This is what makes Fill and Fit scaling work: Android's usual video scaling relies on resizing the display surface, which live wallpapers aren't allowed to do (see issue #1).
+The app implements an Android `WallpaperService` that plays the chosen video using `MediaPlayer`. Video looping is optional; when disabled, playback stops at the end and the final frame remains visible. The optional unlock animation prepares the first frame while the screen is off, then plays the video after the phone is unlocked. Decoded frames go to a `SurfaceTexture` and are drawn with a small OpenGL ES 2.0 renderer (`VideoFrameRenderer.kt`), which applies the video's rotation and always uses Fill scaling to cover the display.
 
-GIFs (version 1.3.0) don't go through `MediaPlayer`. `GifDecoder.kt` is a small pure-Kotlin GIF89a decoder written for this app, and `GifPlayer.kt` shows one frame at a time, timed by each frame's own delay divided by your speed setting. Frames are uploaded as textures to the same renderer, so Fill and Fit work identically for GIFs and videos. The app recognises GIFs by their file header rather than their file name. Transparent areas of a GIF are drawn black, and GIF files over 50 MB are not supported.
+GIFs (version 1.3.0) don't go through `MediaPlayer`. `GifDecoder.kt` is a small pure-Kotlin GIF89a decoder written for this app, and `GifPlayer.kt` shows one frame at a time, timed by each frame's own delay divided by your speed setting. Frames are uploaded as textures to the same renderer, so GIFs also use the same edge-to-edge Fill scaling. GIF playback remains animated and looping. The app recognises GIFs by their file header rather than their file name. Transparent areas of a GIF are drawn black, and GIF files over 50 MB are not supported.
 
 Setting the wallpaper goes through Android's own system picker (`ACTION_CHANGE_LIVE_WALLPAPER`). The OS requires this for all live wallpaper apps, not just this one.
 
