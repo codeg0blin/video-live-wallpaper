@@ -676,7 +676,7 @@ class VideoWallpaperService : WallpaperService() {
         const val PREF_PLAY_ON_UNLOCK = "play_animation_on_unlock"
         const val PREF_LOOP_VIDEO = "loop_video"
         const val DEFAULT_SPEED = 1.0f
-        const val DEFAULT_LOOP_VIDEO = true
+        const val DEFAULT_LOOP_VIDEO = false
         const val DEFAULT_SCALING_MODE = MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
     }
 }
