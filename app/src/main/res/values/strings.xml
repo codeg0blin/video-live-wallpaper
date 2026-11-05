@@ -3,7 +3,7 @@
     <string name="app_name">Video Live Wallpaper</string>
     <string name="wallpaper_description">Plays your chosen video or GIF as a live wallpaper</string>
     <string name="title">Video Live Wallpaper</string>
-    <string name="subtitle">Loop videos or play them once, animate on unlock, and fill the screen edge to edge.</string>
+    <string name="subtitle">Videos play once by default; looping is optional. Animate on unlock and fill the screen edge to edge.</string>
     <string name="pick_video">Choose Video or GIF</string>
     <string name="no_video_selected">No video or GIF selected</string>
     <string name="set_wallpaper">Set as Wallpaper</string>
